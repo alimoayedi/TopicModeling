@@ -92,7 +92,7 @@ class CustomFeatureSelection:
             return f1_score(self.validate_labels, predicted_labels, average="micro")
 
     
-    def forward_feature_selection(self, embedding=False, evaluation = 'accuracy', epochs=5, batch_size=32):
+    def forward_feature_selection(self, evaluation = 'accuracy', epochs=5, batch_size=32):
         remained_features = list(self.train_feature_df.columns)
         best_score = 0.0
         selected_features = []

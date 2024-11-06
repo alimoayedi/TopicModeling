@@ -52,26 +52,12 @@ train_labels_array = np.array(trainTopics['one_hot'].tolist())
 validation_labels_array = np.array(valTopcis['one_hot'].tolist())
 
 fs = CustomFeatureSelection.CustomFeatureSelection(trainDocs[train_features_lst], train_labels_array, valDocs[train_features_lst], validation_labels_array, feature_dim=max_doc_length, num_classes=num_topics)
+
+vocab_size = cus.get_number_of_tokens(trainDocs['vectorized_padded'])
+fs.embedding_setup(vocab_size=vocab_size, embedded_output_dim=max_doc_length)
+
 fs.forward_feature_selection(evaluation = 'micro')
-# model_selector = SequentialFeatureSelector(estimator=CustomFeatureSelection.CustomClassifier(epochs=10,batch_size=32,verbose=0),
-#                                             n_features_to_select="auto",  # you can also specify a number
-#                                             scoring='accuracy',
-#                                             direction='forward'  # or 'backward'
-#                                             )
 
-# Perform the feature selection process
-# model_selector.fit(train_features_lst, trainTopics['topics_lst'])  # Make sure the shape is correct for stacking inputs
-
-# Get the selected features
-selected_features = np.array(input_features)[model_selector.get_support()]  #TODO what is this?
-print(f"Selected features: {selected_features}")
-
-# Example of getting the performance
-accuracy, precision, recall, f1 =  evaluate_model(model_selector, testDataDict, y_test, input_features)
-
-print(f"Accuracy: {accuracy}")
-print(f"Precision: {precision}")
-print(f"Recall: {recall}")
-print(f"F1 Score: {f1}")
+fs.backward_feature_selection(evaluation = 'micro')
 
 
