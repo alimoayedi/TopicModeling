@@ -1,5 +1,5 @@
 from keras.models import Model
-from keras.layers import Input, concatenate, Dense, Flatten, Dropout, Conv1D, MaxPooling1D, AveragePooling1D
+from keras.layers import Input, concatenate, Dense, Flatten, Dropout, Conv1D, MaxPooling1D, AveragePooling1D, Embedding
 from keras.optimizers import Adam
 from scikeras.wrappers import KerasClassifier
 from sklearn.metrics import f1_score, accuracy_score
@@ -17,12 +17,33 @@ class CustomFeatureSelection:
         self.feature_dim = feature_dim
         self.num_classes = num_classes
         self.model = None
+        self.vocab_size = None
+        self.embedded_output_dim = None
+        self.trainable = True
+        self.embedding_weight = None
+
+
+    def embedding_setup(self, vocab_size, embedded_output_dim, pretrained=None):
+        
+        self.vocab_size = vocab_size
+        self.embedded_output_dim = embedded_output_dim
+        if pretrained == 'GloVe':
+            
+            self.trainable = False
+        elif pretrained == 'Word2Vec':
+
+            self.trainable = False
+        
+
+
 
     def CustomModel(self, features):
         inputs = []
         layers_to_concatinate = []
-        for _ in features:
+        for feature in features:
             input = Input(shape=(self.feature_dim,1))
+            if feature == "Embedding":
+                    input = Embedding(input_dim=self.vocab_size, output_dim=self.embedded_output_dim, weights=self.embedding_weight, trainable = self.trainable)(input)        
             inputs.append(input)
             conv_layer_1 = Conv1D(filters=256, kernel_size=5, activation='relu')(input) 
             pooling_layer_1 = AveragePooling1D(pool_size=2)(conv_layer_1)
@@ -69,8 +90,9 @@ class CustomFeatureSelection:
             return f1_score(self.validate_labels, predicted_labels, average="micro")
 
     
-    def forward_feature_selection(self, evaluation = 'accuracy', epochs=5, batch_size=32):
+    def forward_feature_selection(self, embedding=False, evaluation = 'accuracy', epochs=5, batch_size=32):
         remained_features = list(self.train_feature_df.columns)
+        if embedding: remained_features + ["Embedding"]
         best_score = 0.0
         selected_features = []
 
