@@ -39,15 +39,15 @@ class CustomFeatureSelection:
         inputs = []
         layers_to_concatinate = []
         for feature in features:
-            input = Input(shape=(self.feature_dim,1))
-            inputs.append(input)
-            
             if feature == "embedd":
+                input = Input(shape=(self.feature_dim,))
                 embedded_layer = Embedding(input_dim=self.vocab_size, output_dim=self.embedded_output_dim, weights=self.embedding_weight, trainable = self.trainable)(input)
                 conv_layer_1 = Conv1D(filters=256, kernel_size=5, activation='relu')(embedded_layer) 
             else:
+                input = Input(shape=(self.feature_dim,1))
                 conv_layer_1 = Conv1D(filters=256, kernel_size=5, activation='relu')(input)
-
+            
+            inputs.append(input)
             pooling_layer_1 = AveragePooling1D(pool_size=2)(conv_layer_1)
             conv_layer_2 = Conv1D(filters=128, kernel_size=4, activation='relu')(pooling_layer_1)
             pooling_layer_2 = AveragePooling1D(pool_size=2)(conv_layer_2)
