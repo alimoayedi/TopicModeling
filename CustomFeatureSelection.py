@@ -35,17 +35,19 @@ class CustomFeatureSelection:
             self.trainable = False
         
 
-
-
     def CustomModel(self, features):
         inputs = []
         layers_to_concatinate = []
         for feature in features:
             input = Input(shape=(self.feature_dim,1))
-            if feature == "Embedding":
-                    input = Embedding(input_dim=self.vocab_size, output_dim=self.embedded_output_dim, weights=self.embedding_weight, trainable = self.trainable)(input)        
             inputs.append(input)
-            conv_layer_1 = Conv1D(filters=256, kernel_size=5, activation='relu')(input) 
+            
+            if feature == "embedd":
+                embedded_layer = Embedding(input_dim=self.vocab_size, output_dim=self.embedded_output_dim, weights=self.embedding_weight, trainable = self.trainable)(input)
+                conv_layer_1 = Conv1D(filters=256, kernel_size=5, activation='relu')(embedded_layer) 
+            else:
+                conv_layer_1 = Conv1D(filters=256, kernel_size=5, activation='relu')(input)
+
             pooling_layer_1 = AveragePooling1D(pool_size=2)(conv_layer_1)
             conv_layer_2 = Conv1D(filters=128, kernel_size=4, activation='relu')(pooling_layer_1)
             pooling_layer_2 = AveragePooling1D(pool_size=2)(conv_layer_2)
@@ -92,7 +94,6 @@ class CustomFeatureSelection:
     
     def forward_feature_selection(self, embedding=False, evaluation = 'accuracy', epochs=5, batch_size=32):
         remained_features = list(self.train_feature_df.columns)
-        if embedding: remained_features + ["Embedding"]
         best_score = 0.0
         selected_features = []
 
@@ -100,7 +101,7 @@ class CustomFeatureSelection:
             best_feature = None
             for feature in remained_features:
                 current_features = selected_features + [feature]
-                
+
                 # Build and train CNN model for the current feature combination
                 self.CustomModel(current_features)
 
