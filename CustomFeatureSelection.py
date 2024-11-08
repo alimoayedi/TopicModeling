@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import random
 
-class CustomFeatureSelection:
+class EqualSizedFeatureSelection:
     
     def __init__(self, train_feature_df, train_labels, validation_feature_df, validate_labels, feature_dim, num_classes):
         self.train_feature_df = train_feature_df
@@ -41,7 +41,11 @@ class CustomFeatureSelection:
         for feature in features:
             if feature == "embedd":
                 input = Input(shape=(self.feature_dim,))
-                embedded_layer = Embedding(input_dim=self.vocab_size, output_dim=self.embedded_output_dim, weights=self.embedding_weight, trainable = self.trainable)(input)
+                embedded_layer = Embedding(
+                                            input_dim=self.vocab_size, 
+                                            output_dim=self.embedded_output_dim, 
+                                            weights=self.embedding_weight, 
+                                            trainable = self.trainable)(input)
                 conv_layer_1 = Conv1D(filters=256, kernel_size=5, activation='relu')(embedded_layer) 
             else:
                 input = Input(shape=(self.feature_dim,1))
@@ -208,3 +212,97 @@ class CustomFeatureSelection:
 
     def print_performance(self, features, score):
         print(f"{features}: {score}")
+
+class UnEqualSizedFeatureSelection:
+    
+    def __init__(self):
+        self.vocab_size = None
+        self.embedded_output_dim = None
+        self.trainable = True
+        self.embedding_weight = None
+
+    def embedding_setup(self, vocab_size, embedded_output_dim, pretrained=None):
+        
+        self.vocab_size = vocab_size
+        self.embedded_output_dim = embedded_output_dim
+        if pretrained == 'GloVe':
+            
+            self.trainable = False
+        elif pretrained == 'Word2Vec':
+
+            self.trainable = False
+        
+
+    def customModel(self, features, settings):
+        # saves inputs and layers
+        inputs = []
+        layers_to_concatinate = []
+
+        # loops over features
+        for feature in features:
+            # gets the settings of each feature
+            setting = settings.loc[feature]
+            
+            # check neural network parameters
+            if not (len(setting['filter_sizes']) == len(setting['kernel_sizes']) == len(setting['pool_sizes'])):
+                raise ValueError("The lists 'filter_sizes', 'kernel_sizes', and 'pool_sizes' do not match in size.")
+            
+            # gets the feature dimension
+            feature_dim = setting['feature_dim']
+            # gets neural network hyper-parammeters and zip them
+            model_hyper_parameters = list(zip(setting['filter_sizes'], 
+                                              setting['kernel_sizes'],
+                                              setting['pool_sizes']))
+
+            if setting['embedding']:
+                input_layer = Input(shape=(feature_dim,))
+                embedded_layer = Embedding(
+                                            input_dim=self.vocab_size, 
+                                            output_dim=self.embedded_output_dim, 
+                                            weights=self.embedding_weight, 
+                                            trainable = self.trainable)(input_layer)            
+                passing_layer = embedded_layer
+            else:
+                input_layer = Input(shape=(feature_dim,1))
+                passing_layer = input_layer
+            
+            inputs.append(input_layer)
+            
+            for param_set in model_hyper_parameters:
+                passing_layer = Conv1D(filters=param_set[0], kernel_size=param_set[1], activation='relu', padding='same')(passing_layer)
+                passing_layer = AveragePooling1D(pool_size=param_set[2])(passing_layer)
+
+            flatten_layer = Flatten()(passing_layer)
+
+            layers_to_concatinate.append(flatten_layer)
+        
+        if len(layers_to_concatinate) > 1:
+            merged = concatenate(layers_to_concatinate)
+        else:
+            merged = layers_to_concatinate[0]
+    
+
+        output_layer = GlobalAveragePooling1D()(passing_layer)
+        
+        self.model = Model(inputs=input_layer, outputs=output_layer)
+        self.model.summary()
+        
+        return self.model
+    
+    def forward_selection(self, train_df, train_labels, test_df, test_labels, features_settings):
+        if not isinstance(train_df,  pd.DataFrame):
+            raise ValueError("train type must be a pandas dataframe")
+        
+        if not isinstance(test_df,  pd.DataFrame):
+            raise ValueError("test type must be a pandas dataframe")
+        
+        if not isinstance(features_settings,  pd.DataFrame):
+            raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
+        
+        if not isinstance(features_settings,  pd.DataFrame):
+            raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
+
+
+        # gets the list of features
+        features = train_df.columns.to_list()
+
