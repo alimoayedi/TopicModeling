@@ -15,6 +15,8 @@ class CustomFeatureSelection:
         self.test_df = test_df
         self.test_labels = test_labels
 
+        self.model = None
+
         self.vocab_size = None
         self.embedded_output_dim = None
         self.trainable = True
@@ -225,6 +227,8 @@ class CustomFeatureSelection:
             inputs = []
             layers_to_concatinate = []
 
+            dense_settings = list(zip(dense_settings['dense'], dense_settings['dropout']))
+
             # loops over features
             for feature in features:
                 # gets the settings of each feature
@@ -267,14 +271,23 @@ class CustomFeatureSelection:
                 merged = concatenate(layers_to_concatinate)
             else:
                 merged = layers_to_concatinate[0]
-        
+            
+            passing_layer = merged
+            # Additional dense layers for further processing
+            for dense_setting in dense_settings:
+                passing_layer = Dense(dense_setting[0], activation='relu')(passing_layer)
+                passing_layer = Dropout(0.1)(passing_layer)
 
-            output_layer = GlobalAveragePooling1D()(passing_layer)
+            output_layer = Dense(self.num_classes, activation='softmax')(passing_layer)
+
+            # Compile the model
+            model = Model(inputs=inputs, outputs=output_layer)
+            model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
             
-            self.model = Model(inputs=input_layer, outputs=output_layer)
-            self.model.summary()
+            model.summary()
             
-            return self.model
+            self.model = model
+        
         
         def forward_selection(self, features_settings, dense_settings):
             if not isinstance(self.train_df,  pd.DataFrame):
@@ -299,14 +312,31 @@ class CustomFeatureSelection:
                 for feature in remained_features:
                     current_features = selected_features + [feature]
                     
-                    model = self.customAdjustableModel(features=current_features,
+                    self.model = self.customAdjustableModel(features=current_features,
                                                         settings=features_settings.loc[current_features],
                                                         dense_settings=dense_settings)
                     
                     train_array = [np.stack(self.train_df[feature].to_numpy()).reshape(-1, self.feature_dim, 1) for feature in current_features]
 
-                    model.fit(train_array, self.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
+                    self.model.fit(train_array, self.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
 
+                    # Evaluate model on validation data
+                    score = self.evaluate_model(current_features, evaluation)
+
+                    if score > best_score: 
+                        best_score = score
+                        best_feature = feature
+                    
+                    self.print_performance(current_features, score)
+                
+                # If no improvement, stop the process
+                if best_feature:
+                    selected_features.append(best_feature)
+                    remained_features.remove(best_feature)
+                else:
+                    break
+
+            return selected_features, best_score
 
 
 
