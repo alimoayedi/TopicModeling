@@ -22,8 +22,8 @@ class CustomFeatureSelection:
         self.trainable = True
         self.embedding_weight = None
 
-        EqualSizedFeatureSelection = self.EqualSizedFeatureSelection(self)
-        UnEqualSizedFeatureSelection = self.UnEqualSizedFeatureSelection(self)
+        # equalSizedFeatureSelection = self.EqualSizedFeatureSelection(self)
+        unEqualSizedFeatureSelection = self.UnEqualSizedFeatureSelection()
 
     def setVocabSize(self, value):
         self.vocab_size = value
@@ -239,8 +239,8 @@ class CustomFeatureSelection:
 
     class UnEqualSizedFeatureSelection:
         
-        def __init__(self, outer_instance):
-            self.globalInstance = outer_instance
+        def __init__(self):
+            pass
             
         def __customAdjustableModel(self, features, settings, dense_settings):
             # saves inputs and layers
@@ -267,10 +267,10 @@ class CustomFeatureSelection:
 
                 if setting['embedding']:
                     input_layer = Input(shape=(feature_dim,))
-                    embedded_layer = Embedding(input_dim=self.globalInstance.vocab_size, 
-                                               output_dim=self.globalInstance.embedded_output_dim, 
-                                               weights=self.globalInstance.embedding_weight, 
-                                               trainable = self.globalInstance.trainable)(input_layer)            
+                    embedded_layer = Embedding(input_dim=self.vocab_size, 
+                                               output_dim=self.embedded_output_dim, 
+                                               weights=self.embedding_weight, 
+                                               trainable = self.trainable)(input_layer)            
                     passing_layer = embedded_layer
                 else:
                     input_layer = Input(shape=(feature_dim,1))

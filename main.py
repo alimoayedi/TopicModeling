@@ -32,7 +32,25 @@ trainDocs, valDocs, testDocs = feature_generator.generateFeatures()
 features_lst=['pos_padded', 'tf', 'tfidf', 'term_topic_weight', 'tuple_2']
 train_selected_features, val_selected_features, test_selected_features = trainDocs[features_lst], valDocs[features_lst], testDocs[features_lst]
 
-CustomFeatureSelection
+train_labels_array = np.array(trainTopics['one_hot'].tolist())
+validation_labels_array = np.array(valTopcis['one_hot'].tolist())
+
+fs = CustomFeatureSelection(train_df=train_selected_features,
+                            train_labels=train_labels_array,
+                            test_df=val_selected_features,
+                            test_labels=validation_labels_array)
+
+fs.equalSizedFeatureSelection()
+
+
+fs.unEqualSizedFeatureSelection()
+
+
+
+
+
+##############################################################
+# Dimension Reduction
 
 dimensionReduction = CustomDimensionReduction(features_df=train_selected_features, labels_df=trainTopics['topics_lst'], max_feature_dim=max_doc_length)
 dimensionReduction.featureDimensionCheck()
