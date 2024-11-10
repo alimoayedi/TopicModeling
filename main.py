@@ -32,6 +32,8 @@ trainDocs, valDocs, testDocs = feature_generator.generateFeatures()
 features_lst=['pos_padded', 'tf', 'tfidf', 'term_topic_weight', 'tuple_2']
 train_selected_features, val_selected_features, test_selected_features = trainDocs[features_lst], valDocs[features_lst], testDocs[features_lst]
 
+CustomFeatureSelection
+
 dimensionReduction = CustomDimensionReduction(features_df=train_selected_features, labels_df=trainTopics['topics_lst'], max_feature_dim=max_doc_length)
 dimensionReduction.featureDimensionCheck()
 mismatched_features = dimensionReduction.mismatched_features

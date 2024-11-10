@@ -22,8 +22,8 @@ class CustomFeatureSelection:
         self.trainable = True
         self.embedding_weight = None
 
-        self.EqualSizedFeatureSelection(self)
-        self.UnEqualSizedFeatureSelection(self)
+        EqualSizedFeatureSelection = self.EqualSizedFeatureSelection(self)
+        UnEqualSizedFeatureSelection = self.UnEqualSizedFeatureSelection(self)
 
     def setVocabSize(self, value):
         self.vocab_size = value
