@@ -22,6 +22,12 @@ class CustomFeatureSelection:
         self.trainable = True
         self.embedding_weight = None
 
+        self.EqualSizedFeatureSelection(self)
+        self.UnEqualSizedFeatureSelection(self)
+
+    def setVocabSize(self, value):
+        self.vocab_size = value
+
     def embedding_setup(self, vocab_size, embedded_output_dim, pretrained=None):
         self.vocab_size = vocab_size
         self.embedded_output_dim = embedded_output_dim
@@ -31,6 +37,20 @@ class CustomFeatureSelection:
         elif pretrained == 'Word2Vec':
 
             self.trainable = False
+
+            # Function to evaluate model performance on validation data
+    def evaluate_model(self, features, evaluation):
+        validate_array = [np.stack(self.test_df[feature].to_numpy()).reshape(-1, self.feature_dim, 1) for feature in features]
+        predictions = self.model.predict(validate_array)
+        predicted_labels = np.argmax(predictions, axis=1)
+        
+        if self.test_labels.ndim > 1:  # if test_labels is one-hot
+            predicted_labels = np.eye(self.num_classes)[predicted_labels]
+
+        if evaluation == 'accuracy':    
+            return accuracy_score(self.test_labels, predicted_labels)
+        if evaluation == 'micro':
+            return f1_score(self.test_labels, predicted_labels, average="micro")
 
     class EqualSizedFeatureSelection:
         
@@ -219,10 +239,10 @@ class CustomFeatureSelection:
 
     class UnEqualSizedFeatureSelection:
         
-        def __init__(self):
-            pass
+        def __init__(self, outer_instance):
+            self.globalInstance = outer_instance
             
-        def customAdjustableModel(self, features, settings, dense_settings):
+        def __customAdjustableModel(self, features, settings, dense_settings):
             # saves inputs and layers
             inputs = []
             layers_to_concatinate = []
@@ -247,11 +267,10 @@ class CustomFeatureSelection:
 
                 if setting['embedding']:
                     input_layer = Input(shape=(feature_dim,))
-                    embedded_layer = Embedding(
-                                                input_dim=self.vocab_size, 
-                                                output_dim=self.embedded_output_dim, 
-                                                weights=self.embedding_weight, 
-                                                trainable = self.trainable)(input_layer)            
+                    embedded_layer = Embedding(input_dim=self.globalInstance.vocab_size, 
+                                               output_dim=self.globalInstance.embedded_output_dim, 
+                                               weights=self.globalInstance.embedding_weight, 
+                                               trainable = self.globalInstance.trainable)(input_layer)            
                     passing_layer = embedded_layer
                 else:
                     input_layer = Input(shape=(feature_dim,1))
@@ -281,15 +300,13 @@ class CustomFeatureSelection:
             output_layer = Dense(self.num_classes, activation='softmax')(passing_layer)
 
             # Compile the model
-            model = Model(inputs=inputs, outputs=output_layer)
-            model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
+            self.globalInstance.model = Model(inputs=inputs, outputs=output_layer)
+            self.globalInstance.model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
             
-            model.summary()
+            self.globalInstance.model.summary()
             
-            self.model = model
         
-        
-        def forward_selection(self, features_settings, dense_settings):
+        def forward_selection(self, features_settings, dense_settings, evaluation = 'accuracy', epochs=5, batch_size=32):
             if not isinstance(self.train_df,  pd.DataFrame):
                 raise ValueError("train type must be a pandas dataframe")
             
@@ -312,16 +329,16 @@ class CustomFeatureSelection:
                 for feature in remained_features:
                     current_features = selected_features + [feature]
                     
-                    self.model = self.customAdjustableModel(features=current_features,
-                                                        settings=features_settings.loc[current_features],
-                                                        dense_settings=dense_settings)
+                    self.model = self.__customAdjustableModel(features=current_features,
+                                                              settings=features_settings.loc[current_features],
+                                                              dense_settings=dense_settings)
                     
                     train_array = [np.stack(self.train_df[feature].to_numpy()).reshape(-1, self.feature_dim, 1) for feature in current_features]
 
-                    self.model.fit(train_array, self.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
+                    self.globalInstance.model.fit(train_array, self.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
 
                     # Evaluate model on validation data
-                    score = self.evaluate_model(current_features, evaluation)
+                    score = self.globalInstance.evaluate_model(current_features, evaluation)
 
                     if score > best_score: 
                         best_score = score
