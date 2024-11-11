@@ -268,10 +268,10 @@ class CustomFeatureSelection:
 
                 if setting['embedding']:
                     input_layer = Input(shape=(feature_dim,))
-                    embedded_layer = Embedding(input_dim=self.vocab_size, 
-                                                output_dim=self.embedded_output_dim, 
-                                                weights=self.embedding_weight, 
-                                                trainable = self.trainable)(input_layer)            
+                    embedded_layer = Embedding(input_dim=self.global_instances.vocab_size, 
+                                                output_dim=self.global_instances.embedded_output_dim, 
+                                                weights=self.global_instances.embedding_weight, 
+                                                trainable = self.global_instances.trainable)(input_layer)            
                     passing_layer = embedded_layer
                 else:
                     input_layer = Input(shape=(feature_dim,1))
@@ -304,7 +304,7 @@ class CustomFeatureSelection:
             self.global_instances.model = Model(inputs=inputs, outputs=output_layer)
             self.global_instances.model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
             
-            self.global_instances.model.summary()
+            # self.global_instances.model.summary()
             
         
         def forward_selection(self, features_settings, dense_settings, evaluation = 'accuracy', epochs=5, batch_size=32):
