@@ -9,11 +9,13 @@ import random
 
 
 class CustomFeatureSelection:
-    def __init__(self, train_df, train_labels, test_df, test_labels):
+    def __init__(self, train_df, train_labels, test_df, test_labels, num_classes):
         self.train_df = train_df
         self.train_labels = train_labels
         self.test_df = test_df
         self.test_labels = test_labels
+        
+        self.num_classes = num_classes
 
         self.model = None
 
@@ -22,8 +24,8 @@ class CustomFeatureSelection:
         self.trainable = True
         self.embedding_weight = None
 
-        # equalSizedFeatureSelection = self.EqualSizedFeatureSelection(self)
-        unEqualSizedFeatureSelection = self.UnEqualSizedFeatureSelection()
+        # self.EqualSizedFeatureSelection = self.EqualSizedFeatureSelection(self)
+        self.UnEqualSizedFeatureSelection = self.UnEqualSizedFeatureSelection(self)
 
     def setVocabSize(self, value):
         self.vocab_size = value
@@ -39,8 +41,8 @@ class CustomFeatureSelection:
             self.trainable = False
 
             # Function to evaluate model performance on validation data
-    def evaluate_model(self, features, evaluation):
-        validate_array = [np.stack(self.test_df[feature].to_numpy()).reshape(-1, self.feature_dim, 1) for feature in features]
+    
+    def evaluate_model(self, validate_array, evaluation):
         predictions = self.model.predict(validate_array)
         predicted_labels = np.argmax(predictions, axis=1)
         
@@ -52,11 +54,13 @@ class CustomFeatureSelection:
         if evaluation == 'micro':
             return f1_score(self.test_labels, predicted_labels, average="micro")
 
+    def print_performance(self, features, score):
+        print(f"{features}: {score}")
+
     class EqualSizedFeatureSelection:
         
-        def __init__(self, feature_dim, num_classes):
+        def __init__(self, feature_dim):
             self.feature_dim = feature_dim
-            self.num_classes = num_classes
             self.model = None
 
         def CustomModel(self, features):
@@ -234,13 +238,10 @@ class CustomFeatureSelection:
 
             return current_features, current_score
 
-        def print_performance(self, features, score):
-            print(f"{features}: {score}")
-
     class UnEqualSizedFeatureSelection:
         
-        def __init__(self):
-            pass
+        def __init__(self, global_instances):
+            self.global_instances = global_instances
             
         def __customAdjustableModel(self, features, settings, dense_settings):
             # saves inputs and layers
@@ -268,9 +269,9 @@ class CustomFeatureSelection:
                 if setting['embedding']:
                     input_layer = Input(shape=(feature_dim,))
                     embedded_layer = Embedding(input_dim=self.vocab_size, 
-                                               output_dim=self.embedded_output_dim, 
-                                               weights=self.embedding_weight, 
-                                               trainable = self.trainable)(input_layer)            
+                                                output_dim=self.embedded_output_dim, 
+                                                weights=self.embedding_weight, 
+                                                trainable = self.trainable)(input_layer)            
                     passing_layer = embedded_layer
                 else:
                     input_layer = Input(shape=(feature_dim,1))
@@ -297,20 +298,20 @@ class CustomFeatureSelection:
                 passing_layer = Dense(dense_setting[0], activation='relu')(passing_layer)
                 passing_layer = Dropout(0.1)(passing_layer)
 
-            output_layer = Dense(self.num_classes, activation='softmax')(passing_layer)
+            output_layer = Dense(self.global_instances.num_classes, activation='softmax')(passing_layer)
 
             # Compile the model
-            self.globalInstance.model = Model(inputs=inputs, outputs=output_layer)
-            self.globalInstance.model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
+            self.global_instances.model = Model(inputs=inputs, outputs=output_layer)
+            self.global_instances.model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy'])
             
-            self.globalInstance.model.summary()
+            self.global_instances.model.summary()
             
         
         def forward_selection(self, features_settings, dense_settings, evaluation = 'accuracy', epochs=5, batch_size=32):
-            if not isinstance(self.train_df,  pd.DataFrame):
+            if not isinstance(self.global_instances.train_df,  pd.DataFrame):
                 raise ValueError("train type must be a pandas dataframe")
             
-            if not isinstance(self.test_df,  pd.DataFrame):
+            if not isinstance(self.global_instances.test_df,  pd.DataFrame):
                 raise ValueError("test type must be a pandas dataframe")
             
             if not isinstance(features_settings,  pd.DataFrame):
@@ -320,7 +321,7 @@ class CustomFeatureSelection:
                 raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
 
             # gets the list of features
-            remained_features = self.train_df.columns.to_list()
+            remained_features = self.global_instances.train_df.columns.to_list()
             best_score = 0.0
             selected_features = []
 
@@ -329,22 +330,24 @@ class CustomFeatureSelection:
                 for feature in remained_features:
                     current_features = selected_features + [feature]
                     
-                    self.model = self.__customAdjustableModel(features=current_features,
-                                                              settings=features_settings.loc[current_features],
-                                                              dense_settings=dense_settings)
+                    self.__customAdjustableModel(features=current_features,
+                                                 settings=features_settings.loc[current_features],
+                                                 dense_settings=dense_settings)
                     
-                    train_array = [np.stack(self.train_df[feature].to_numpy()).reshape(-1, self.feature_dim, 1) for feature in current_features]
+                    train_array = [np.stack(self.global_instances.train_df[feature]) for feature in current_features]
 
-                    self.globalInstance.model.fit(train_array, self.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
+                    self.global_instances.model.fit(train_array, self.global_instances.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
+                    
+                    validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in current_features]
 
                     # Evaluate model on validation data
-                    score = self.globalInstance.evaluate_model(current_features, evaluation)
+                    score = self.global_instances.evaluate_model(validate_array, evaluation)
 
                     if score > best_score: 
                         best_score = score
                         best_feature = feature
                     
-                    self.print_performance(current_features, score)
+                    self.global_instances.print_performance(current_features, score)
                 
                 # If no improvement, stop the process
                 if best_feature:
