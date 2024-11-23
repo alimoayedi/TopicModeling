@@ -330,13 +330,11 @@ class CustomFeatureSelection:
                 for feature in remained_features:
                     current_features = selected_features + [feature]
                     
-                    self.__customAdjustableModel(features=current_features,
-                                                 settings=features_settings.loc[current_features],
-                                                 dense_settings=dense_settings)
-                    
-                    train_array = [np.stack(self.global_instances.train_df[feature]) for feature in current_features]
-
-                    self.global_instances.model.fit(train_array, self.global_instances.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
+                    self.__trainModel(current_features,
+                                      features_settings.loc[current_features],
+                                      dense_settings,
+                                      epochs,
+                                      batch_size)
                     
                     validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in current_features]
 
@@ -357,8 +355,133 @@ class CustomFeatureSelection:
                     break
 
             return selected_features, best_score
+        
+        def backward_feature_selection(self, features_settings, dense_settings, evaluation = 'accuracy', epochs=5, batch_size=32):
+            if not isinstance(self.global_instances.train_df,  pd.DataFrame):
+                raise ValueError("train type must be a pandas dataframe")
+            
+            if not isinstance(self.global_instances.test_df,  pd.DataFrame):
+                raise ValueError("test type must be a pandas dataframe")
+            
+            if not isinstance(features_settings,  pd.DataFrame):
+                raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
+            
+            if not isinstance(dense_settings,  pd.DataFrame):
+                raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
 
+            selected_features = self.global_instances.train_df.columns.to_list()
+            
+            while len(selected_features) > 1:
+                
+                self.__trainModel(selected_features, 
+                                  features_settings, 
+                                  dense_settings, 
+                                  epochs, 
+                                  batch_size)
 
+                validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in selected_features]
 
+                # Evaluate model on validation data
+                score = self.global_instances.evaluate_model(validate_array, evaluation)
 
+                best_score = score
+                best_combination = selected_features
+                
+                self.global_instances.print_performance(current_features, score)
+                
+                for feature in selected_features:
+                    current_features = list(selected_features - {feature})
+                    
+                    self.__trainModel(current_features,
+                                      features_settings.loc[current_features],
+                                      dense_settings,
+                                      epochs,
+                                      batch_size)
+                    
+                    validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in current_features]
+                                        
+                    # Evaluate model on validation data
+                    score = self.evaluate_model(current_features,evaluation)
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_combination = set(current_features)
+
+                    self.global_instances.print_performance(current_features, score)
+                
+                # Update selected features with the best combination if it improved F-score
+                if best_combination != selected_features:
+                    selected_features = best_combination
+                else:
+                    break
+
+            return selected_features, best_score
+        
+        def randomized_feature_selection(self, features_settings, dense_settings, num_iterations=20, evaluation = 'accuracy', epochs=5, batch_size=32):
+            if not isinstance(self.global_instances.train_df,  pd.DataFrame):
+                raise ValueError("train type must be a pandas dataframe")
+            
+            if not isinstance(self.global_instances.test_df,  pd.DataFrame):
+                raise ValueError("test type must be a pandas dataframe")
+            
+            if not isinstance(features_settings,  pd.DataFrame):
+                raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
+            
+            if not isinstance(dense_settings,  pd.DataFrame):
+                raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
+
+            features_lst = self.global_instances.train_df.columns.to_list()
+            waiting_features = set()
+            iteration_count = 0
+
+            # Select the best feature from the features_lst
+            current_features, current_score = self.forward_selection(features_settings, dense_settings, evaluation=evaluation, epochs=epochs, batch_size=batch_size)
+
+            while iteration_count < num_iterations and len(current_features) < len(features_lst):
+                # Select a random feature from the remaining features_lst
+                remaining_features = list(set(features_lst) - set(current_features) - waiting_features)
+
+                if not remaining_features:
+                    break
+                
+                random_feature = random.choice(remaining_features)
+                current_features.append(random_feature)
+                
+                waiting_features.clear()  # clear waiting features for future chance of being added to the feature combination
+
+                self.__trainModel(current_features,
+                                    features_settings.loc[current_features],
+                                    dense_settings,
+                                    epochs,
+                                    batch_size)
+                
+                validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in current_features]
+
+                # Evaluate model on validation data
+                new_score = self.global_instances.evaluate_model(validate_array, evaluation)
+
+                self.global_instances.print_performance(current_features, new_score)
+
+                if new_score > current_score:
+                    # If performance improved, update current performance
+                    current_score = new_score
+                elif len(current_features) > 2:
+                    # If performance did not improve, remove a random feature from current_features
+                    feature_to_remove = random.choice(current_features)
+                    current_features.remove(feature_to_remove)
+                    waiting_features.add(feature_to_remove)
+
+                iteration_count += 1
+
+            return current_features, current_score 
+
+        def __trainModel(self, features, settings, dense_settings, epochs, batch_size):
+            self.__customAdjustableModel(features=features,
+                                         settings=settings,
+                                         dense_settings=dense_settings)
+                    
+            train_array = [np.stack(self.global_instances.train_df[feature]) for feature in features]
+
+            self.global_instances.model.fit(train_array, self.global_instances.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
+                    
 
