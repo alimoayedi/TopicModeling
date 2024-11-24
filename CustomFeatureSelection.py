@@ -438,7 +438,7 @@ class CustomFeatureSelection:
 
             return selected_features, best_score
         
-        def randomized_feature_selection(self, features_settings, dense_settings, num_iterations=20, evaluation = 'accuracy', epochs=5, batch_size=32):
+        def randomized_selection(self, features_settings, dense_settings, num_iterations=20, evaluation = 'accuracy', epochs=5, batch_size=32):
             if not isinstance(self.global_instances.train_df,  pd.DataFrame):
                 raise ValueError("train type must be a pandas dataframe")
             
@@ -457,7 +457,8 @@ class CustomFeatureSelection:
 
             # Select the best feature from the features_lst
             current_features, current_score = self.forward_selection(features_settings, dense_settings, evaluation=evaluation, epochs=epochs, batch_size=batch_size)
-
+            current_score = current_score[evaluation]
+            
             while iteration_count < num_iterations and len(current_features) < len(features_lst):
                 # Select a random feature from the remaining features_lst
                 remaining_features = list(set(features_lst) - set(current_features) - waiting_features)
