@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import CustomFeatureSelection
 from CustomDimensionReduction import CustomDimensionReduction
 from FeatureGenerator import FeatureGenerator
@@ -29,21 +30,75 @@ trainDocs['trimmed'], valDocs['trimmed'], testDocs['trimmed'] = feature_generato
                                                                                                   max_doc_length)
 trainDocs, valDocs, testDocs = feature_generator.generateFeatures()
 
-features_lst=['pos_padded', 'tf', 'tfidf', 'term_topic_weight', 'tuple_2']
+# vectorized padded data will be used for different embedding models
+trainDocs['embedd'] = trainDocs['vectorized_padded']
+valDocs['embedd'] = valDocs['vectorized_padded']
+testDocs['embedd'] = testDocs['vectorized_padded']
+
+features_lst=['vectorized_padded', 'embedd', 'pos_padded', 'tf', 'tfidf', 'term_topic_weight', 'tuple_2']
 train_selected_features, val_selected_features, test_selected_features = trainDocs[features_lst], valDocs[features_lst], testDocs[features_lst]
 
 train_labels_array = np.array(trainTopics['one_hot'].tolist())
 validation_labels_array = np.array(valTopcis['one_hot'].tolist())
 
-fs = CustomFeatureSelection(train_df=train_selected_features,
-                            train_labels=train_labels_array,
-                            test_df=val_selected_features,
-                            test_labels=validation_labels_array)
+# number of unique terms in the whole database
+vocab_size = cus.get_number_of_tokens(trainDocs['vectorized_padded'])
 
-fs.equalSizedFeatureSelection()
+# settings that are used for training the NN model.
+# more layers for each feature can be added, however, the number of
+# layers for different parameters must match
+feature_settings={
+    'filter_sizes': [[512, 256, 128, 128, 64], # vectorized_padded
+                     [512, 256, 128, 128, 64], # embedd
+                     [512, 256, 128, 128, 64], # pos_padded
+                     [512, 256, 128, 128, 64], # tf
+                     [512, 256, 128, 128, 64], # tf_idf
+                     [512, 256, 128, 128, 64], # term_topic_weight
+                     [512, 256, 128, 128, 64]], # tuple_2
+    'kernel_sizes': [[3, 3, 3, 3, 3],
+                     [3, 3, 3, 3, 3],
+                     [3, 3, 3, 3, 3],
+                     [3, 3, 3, 3, 3],
+                     [3, 3, 3, 3, 3],
+                     [3, 3, 3, 3, 3],
+                     [3, 3, 3, 3, 3]],
+    'pool_sizes': [[3, 3, 3, 2, 2],
+                   [3, 3, 3, 2, 2],
+                   [3, 3, 3, 2, 2],
+                   [3, 3, 3, 2, 2],
+                   [3, 3, 3, 2, 2],
+                   [3, 3, 3, 2, 2],
+                   [3, 3, 3, 2, 2]],
+    'embedding':[False, True, False, False, False, False, False],
+    'feature_dim':[max_doc_length, max_doc_length, max_doc_length, vocab_size, vocab_size, 1024, 4578]
+}
+
+# convert features setting into form of a dataframe
+feature_settings = pd.DataFrame(feature_settings, index=features_lst)
+
+# dense layer settings
+dense_settings = {
+    'dense':[64, 32, 16],
+    'dropout':[0.1, 0.1, 0.1]
+}
+
+# convert dense dictionary into a dataframe
+dense_settings = pd.DataFrame(dense_settings)
 
 
-fs.unEqualSizedFeatureSelection()
+fs = CustomFeatureSelection.CustomFeatureSelection(train_df=train_selected_features,
+                                                   train_labels=train_labels_array,
+                                                   test_df=val_selected_features,
+                                                   test_labels=validation_labels_array,
+                                                   num_classes = num_topics)
+
+
+fs.embedding_setup(vocab_size=vocab_size, embedded_output_dim=max_doc_length)
+
+fs.UnEqualSizedFeatureSelection.forward_selection(feature_settings, dense_settings, evaluation = 'micro')
+
+
+# fs.equalSizedFeatureSelection()
 
 
 
