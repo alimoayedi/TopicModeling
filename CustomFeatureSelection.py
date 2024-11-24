@@ -2,7 +2,7 @@ from keras.models import Model
 from keras.layers import Input, concatenate, Dense, Flatten, Dropout, Conv1D, MaxPooling1D, AveragePooling1D, Embedding
 from keras.optimizers import Adam
 from scikeras.wrappers import KerasClassifier
-from sklearn.metrics import f1_score, accuracy_score
+from sklearn.metrics import f1_score, accuracy_score, classification_report
 import numpy as np
 import pandas as pd
 import random
@@ -42,20 +42,40 @@ class CustomFeatureSelection:
 
             # Function to evaluate model performance on validation data
     
-    def evaluate_model(self, validate_array, evaluation):
+    def evaluate_model(self, validate_array):
+        # Get model predictions
         predictions = self.model.predict(validate_array)
         predicted_labels = np.argmax(predictions, axis=1)
         
+        # Check if test_labels are one-hot encoded, convert predicted_labels if necessary
         if self.test_labels.ndim > 1:  # if test_labels is one-hot
-            predicted_labels = np.eye(self.num_classes)[predicted_labels]
-
-        if evaluation == 'accuracy':    
-            return accuracy_score(self.test_labels, predicted_labels)
-        if evaluation == 'micro':
-            return f1_score(self.test_labels, predicted_labels, average="micro")
-
+            true_labels = np.argmax(self.test_labels, axis=1)
+        else:
+            true_labels = self.test_labels
+        
+        # Generate the classification report with per-class and overall metrics
+        report = classification_report(true_labels, predicted_labels, output_dict=True, zero_division=0)
+        
+        # Extract the required metrics
+        results = {
+            "accuracy": accuracy_score(true_labels, predicted_labels),
+            "micro": f1_score(true_labels, predicted_labels, average="micro"),
+            "macro": f1_score(true_labels, predicted_labels, average="macro"),
+            "per_class_metrics": {f"class_{cls}": metrics for cls, metrics in report.items() if cls.isdigit()},
+        }
+        return results
+    
     def print_performance(self, features, score):
-        print(f"{features}: {score}")
+        # Evaluate and print results
+        print("features:", features)
+        print("Accuracy:", score['accuracy'])
+        print("Micro F1:", score['micro'])
+        print("Macro F1:", score['macro'])
+
+        # Print per-class metrics
+        for cls, metrics in score['per_class_metrics'].items():
+            print(f"Class {cls}: Precision={metrics['precision']}, Recall={metrics['recall']}, F1-score={metrics['f1-score']}")
+
 
     class EqualSizedFeatureSelection:
         
@@ -339,10 +359,10 @@ class CustomFeatureSelection:
                     validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in current_features]
 
                     # Evaluate model on validation data
-                    score = self.global_instances.evaluate_model(validate_array, evaluation)
+                    score = self.global_instances.evaluate_model(validate_array)
 
-                    if score > best_score: 
-                        best_score = score
+                    if score[evaluation] > best_score: 
+                        best_score = score[evaluation]
                         best_feature = feature
                     
                     self.global_instances.print_performance(current_features, score)
@@ -356,7 +376,7 @@ class CustomFeatureSelection:
 
             return selected_features, best_score
         
-        def backward_feature_selection(self, features_settings, dense_settings, evaluation = 'accuracy', epochs=5, batch_size=32):
+        def backward_selection(self, features_settings, dense_settings, evaluation = 'accuracy', epochs=5, batch_size=32):
             if not isinstance(self.global_instances.train_df,  pd.DataFrame):
                 raise ValueError("train type must be a pandas dataframe")
             
@@ -382,12 +402,13 @@ class CustomFeatureSelection:
                 validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in selected_features]
 
                 # Evaluate model on validation data
-                score = self.global_instances.evaluate_model(validate_array, evaluation)
+                score = self.global_instances.evaluate_model(validate_array)
 
-                best_score = score
+                self.global_instances.print_performance(selected_features, score)
+
+                best_score = score[evaluation]
+                selected_features = set(selected_features)
                 best_combination = selected_features
-                
-                self.global_instances.print_performance(current_features, score)
                 
                 for feature in selected_features:
                     current_features = list(selected_features - {feature})
@@ -401,10 +422,10 @@ class CustomFeatureSelection:
                     validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in current_features]
                                         
                     # Evaluate model on validation data
-                    score = self.evaluate_model(current_features,evaluation)
-                    
-                    if score > best_score:
-                        best_score = score
+                    score = self.global_instances.evaluate_model(validate_array)
+
+                    if score[evaluation] > best_score:
+                        best_score = score[evaluation]
                         best_combination = set(current_features)
 
                     self.global_instances.print_performance(current_features, score)
@@ -458,13 +479,12 @@ class CustomFeatureSelection:
                 validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in current_features]
 
                 # Evaluate model on validation data
-                new_score = self.global_instances.evaluate_model(validate_array, evaluation)
+                new_score = self.global_instances.evaluate_model(validate_array)
 
                 self.global_instances.print_performance(current_features, new_score)
 
-                if new_score > current_score:
-                    # If performance improved, update current performance
-                    current_score = new_score
+                if new_score[evaluation] > current_score:
+                    current_score = new_score[evaluation]
                 elif len(current_features) > 2:
                     # If performance did not improve, remove a random feature from current_features
                     feature_to_remove = random.choice(current_features)

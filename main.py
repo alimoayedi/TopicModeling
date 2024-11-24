@@ -95,7 +95,7 @@ fs = CustomFeatureSelection.CustomFeatureSelection(train_df=train_selected_featu
 
 fs.embedding_setup(vocab_size=vocab_size, embedded_output_dim=max_doc_length)
 
-fs.UnEqualSizedFeatureSelection.forward_selection(feature_settings, dense_settings, evaluation = 'micro')
+fs.UnEqualSizedFeatureSelection.forward_selection(feature_settings, dense_settings, evaluation = 'report')
 
 
 # fs.equalSizedFeatureSelection()
