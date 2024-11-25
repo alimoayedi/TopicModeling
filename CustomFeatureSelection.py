@@ -24,6 +24,9 @@ class CustomFeatureSelection:
         self.trainable = True
         self.embedding_weight = None
 
+        self.results = []  # To store results across iterations
+
+
         # self.EqualSizedFeatureSelection = self.EqualSizedFeatureSelection(self)
         self.UnEqualSizedFeatureSelection = self.UnEqualSizedFeatureSelection(self)
 
@@ -66,15 +69,24 @@ class CustomFeatureSelection:
         return results
     
     def print_performance(self, features, score):
-        # Evaluate and print results
-        print("features:", features)
-        print("Accuracy:", score['accuracy'])
-        print("Micro F1:", score['micro'])
-        print("Macro F1:", score['macro'])
-
-        # Print per-class metrics
+        # Prepare the metrics for tabular format
+        row = {'Features': str(features),  # Convert features to string for display
+            'Accuracy': score['accuracy'],
+            'Micro F1': score['micro'],
+            'Macro F1': score['macro']}
+        
+        # Add per-class metrics as additional columns
         for cls, metrics in score['per_class_metrics'].items():
-            print(f"Class {cls}: Precision={metrics['precision']}, Recall={metrics['recall']}, F1-score={metrics['f1-score']}")
+            row[f"Class {cls} Precision"] = metrics['precision']
+            row[f"Class {cls} Recall"] = metrics['recall']
+            row[f"Class {cls} F1-score"] = metrics['f1-score']
+        
+        # Append the row to results
+        self.results.append(row)
+        
+        # Convert to DataFrame and display
+        results_df = pd.DataFrame(self.results)
+        print(results_df.to_string(index=False))  # Print the DataFrame as a table
 
 
     class EqualSizedFeatureSelection:
@@ -457,7 +469,6 @@ class CustomFeatureSelection:
 
             # Select the best feature from the features_lst
             current_features, current_score = self.forward_selection(features_settings, dense_settings, evaluation=evaluation, epochs=epochs, batch_size=batch_size)
-            current_score = current_score[evaluation]
             
             while iteration_count < num_iterations and len(current_features) < len(features_lst):
                 # Select a random feature from the remaining features_lst
