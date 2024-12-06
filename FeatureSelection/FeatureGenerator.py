@@ -129,7 +129,6 @@ class FeatureGenerator():
         self.valDocs['pos_padded'] = self.valDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
         self.testDocs['pos_padded'] = self.testDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
-
         token_topic_df = self.__get_term_topic_df(self.trainDocs['vectorized'], self.trainTopics, train_unique_terms, multi_label=False)
         token_topic_weight_df = self.__get_term_topic_weights(self.trainDocs['vectorized'], token_topic_df)
 
