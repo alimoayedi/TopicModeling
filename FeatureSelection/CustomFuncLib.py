@@ -8,15 +8,6 @@ from tensorflow.keras.preprocessing import sequence
 nltk.download('averaged_perceptron_tagger')
 
 
-def load_data():
-    trainDocs = pd.read_parquet('/content/trainDocsDictionary.parquet')
-    trainTopics = pd.read_parquet('/content/trainTopics.parquet')
-    valDocs = pd.read_parquet('/content/valDocsDictionary.parquet')
-    valTopcis = pd.read_parquet('/content/valTopics.parquet')
-    testDocs = pd.read_parquet('/content/testDocsDictionary.parquet')
-    testTopics = pd.read_parquet('/content/testTopics.parquet')
-    return trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics
-
 def trim_documents(doc, max_length):
     if len(doc) > max_length:
         return doc[:max_length]  # Keep first 256 terms

@@ -1,5 +1,10 @@
 import numpy as np
 import pandas as pd
+import random
+from sklearn.model_selection import train_test_split
+
+from LoadDataset import LoadReutersDataset
+from ReutersPreprocessor import ReutersPreprocessor as rp
 import CustomFeatureSelection
 from CustomDimensionReduction import CustomDimensionReduction
 from FeatureGenerator import FeatureGenerator
@@ -8,15 +13,72 @@ import CustomFuncLib as cus
 from sklearn.feature_selection import SequentialFeatureSelector
 
 
+def load_original_dataset(path):
+    # load data
+    loader = LoadReutersDataset(path)
+    documents_dic, topics_dic, _, _, _, _, _ = loader.load()
+    return documents_dic, topics_dic
 
-# variables 
+def load_saved_dataset():
+    trainDocs = pd.read_parquet('/content/trainDocsDictionary.parquet')
+    trainTopics = pd.read_parquet('/content/trainTopics.parquet')
+    valDocs = pd.read_parquet('/content/valDocsDictionary.parquet')
+    valTopcis = pd.read_parquet('/content/valTopics.parquet')
+    testDocs = pd.read_parquet('/content/testDocsDictionary.parquet')
+    testTopics = pd.read_parquet('/content/testTopics.parquet')
+    return trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics
+
+def printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics):
+    print("Train Shape:", trainDocs.shape, trainTopics.shape)
+    for topic in favorite_topics:
+        length = len(trainTopics.index[trainTopics.applymap(lambda x: x == topic).any(axis=1)])
+        print("Category ", topic, " counts in the train set:", length, "\n")
+    
+    print("Validation Shape:", valDocs.shape, valTopcis.shape)
+    for topic in favorite_topics:
+        length = len(valTopcis.index[valTopcis.applymap(lambda x: x == topic).any(axis=1)])
+        print("Category ", topic, " counts in the validation set:", length, "\n")
+
+    print("Test Shape:", testDocs.shape, testTopics.shape)
+    for topic in favorite_topics:
+        length = len(testTopics.index[testTopics.applymap(lambda x: x == topic).any(axis=1)])
+        print("Category ", topic, " counts in the test set:", length, "\n")
+
+
+# variables
+file_directory = '/content/drive/MyDrive/ColabNotebooks'
+num_samples = 2000 # train+test+validation
+min_doc_length = 6 # smaller docs are removed
 max_doc_length = 256 # embedding and truncation
+test_percentage = 0.2
 apply_cosine_similarity_reduction = False
 favorite_topics = ['acq', 'corn', 'crude', 'earn']
 num_topics = len(favorite_topics)
 
-# load data
-trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics = cus.load_data()
+
+
+
+# load original data
+documents_dic, topics_dic = load_original_dataset(data_path=file_directory + '/reuters21578')
+# preprocess data
+documents, topics = rp.preprocess(documents_dic, topics_dic, num_samples, min_doc_length, favorite_topics)
+
+# split data into train test and 
+rand = random.randint(10,99)
+trainValDocs, testDocs, trainValTopics, testTopics = train_test_split(documents, topics, test_size=test_percentage, random_state=rand)
+trainDocs, valDocs, trainTopics, valTopcis = train_test_split(trainValDocs, trainValTopics, test_size=test_percentage, random_state=rand)
+
+
+
+# load preprepared data
+trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics = load_saved_dataset()
+
+
+
+# print dataset description
+printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics)
+
+
 
 feature_generator = FeatureGenerator(max_doc_length=max_doc_length, 
                                      num_topics=num_topics,
@@ -29,6 +91,9 @@ trainDocs['trimmed'], valDocs['trimmed'], testDocs['trimmed'] = feature_generato
                                                                                                   testDocs['preprocess'], 
                                                                                                   max_doc_length)
 trainDocs, valDocs, testDocs = feature_generator.generateFeatures()
+
+
+
 
 # vectorized padded data will be used for different embedding models
 trainDocs['embedd'] = trainDocs['vectorized_padded']

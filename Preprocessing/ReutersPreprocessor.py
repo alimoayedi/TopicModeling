@@ -21,13 +21,8 @@ class ReutersPreprocessor:
 
     def preprocess(self, documents_dic, topics_dic, num_sample, min_doc_lenght, favorite_topics):
         
+        # set favorite variables as a global variable
         self.favorite_topics = favorite_topics
-        # file_directory = '/content/drive/MyDrive/ColabNotebooks'
-        # rand_sample = 2000
-        # minimum_doc_length = 6
-
-        # loader = LoadReutersDataset(data_path=file_directory + '/reuters21578')
-        # documents_dic, topics_dic, _, _, _, _, _ = loader.load()
 
         documents = pd.DataFrame.from_dict(documents_dic, orient='index', columns=['doc'])
         topics = pd.DataFrame.from_dict(topics_dic, orient='index')
@@ -71,24 +66,3 @@ class ReutersPreprocessor:
 
         # convert labels into a one-hot coding
         topics['one_hot'] = topics['topics_lst'].apply(lambda topic_lst: list(np.sum(to_categorical(topic_lst, num_classes=len(favorite_topics)), axis=0)))
-
-        rand = random.randint(10,99)
-
-        trainValDocs, testDocs, trainValTopics, testTopics = train_test_split(documents, topics, test_size=0.2, random_state=rand)
-        trainDocs, valDocs, trainTopics, valTopcis = train_test_split(trainValDocs, trainValTopics, test_size=0.2, random_state=rand)
-        print(trainDocs.shape)
-        print(trainTopics.shape)
-        print(valDocs.shape)
-        print(valTopcis.shape)
-        print(testDocs.shape)
-        print(testTopics.shape)
-        print("\n_______________________\n")
-        # Print the count of documents in each category for train, validation, and test sets
-        for topic in favorite_topics:
-            length = len(trainTopics.index[trainTopics.applymap(lambda x: x == topic).any(axis=1)])
-            print("Category ", topic, " counts in the train set:", length)
-            length = len(valTopcis.index[valTopcis.applymap(lambda x: x == topic).any(axis=1)])
-            print("Category ", topic, " counts in the validation set:", length)
-            length = len(testTopics.index[testTopics.applymap(lambda x: x == topic).any(axis=1)])
-            print("Category ", topic, " counts in the test set:", length)
-            print("_______________________")
