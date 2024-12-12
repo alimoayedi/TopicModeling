@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 
 from LoadDataset import LoadReutersDataset
 from ReutersPreprocessor import ReutersPreprocessor as rp
+from DataVisualization import DataVisualization as dv
 import CustomFeatureSelection
 from CustomDimensionReduction import CustomDimensionReduction
 from FeatureGenerator import FeatureGenerator
@@ -48,9 +49,9 @@ def printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs
 # variables
 file_directory = '/content/drive/MyDrive/ColabNotebooks'
 num_samples = 2000 # train+test+validation
+test_percentage = 0.2 # percentage of data used for test and validation
 min_doc_length = 6 # smaller docs are removed
-max_doc_length = 256 # embedding and truncation
-test_percentage = 0.2
+max_doc_length = 256 # maximum doc length for embedding and truncation
 apply_cosine_similarity_reduction = False
 favorite_topics = ['acq', 'corn', 'crude', 'earn']
 num_topics = len(favorite_topics)
@@ -73,7 +74,8 @@ trainDocs, valDocs, trainTopics, valTopcis = train_test_split(trainValDocs, trai
 # load preprepared data
 trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics = load_saved_dataset()
 
-
+# plots the distribution of documents length after preprocessing
+dv.dataset_distribution(trainDocs['joined_tokens'])
 
 # print dataset description
 printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics)
