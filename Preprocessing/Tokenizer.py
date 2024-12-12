@@ -1,7 +1,6 @@
 import nltk
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import PorterStemmer
+from nltk.tokenize import word_tokenize, RegexpTokenizer
 from nltk.stem import WordNetLemmatizer
 
 nltk.download('stopwords')
@@ -13,17 +12,19 @@ class Tokenizer:
     def __init__(self, lang) -> None:
         self.stop_words = set(stopwords.words(lang))
         self.lemmatizer = WordNetLemmatizer()
+        self.regex_tokenizer = RegexpTokenizer(r'\w+')
 
-
-
-    def tokenize(self, text):
+    def tokenize(self, text, lemmatize = True):
         # Tokenize
-        words = word_tokenize(text)
+        symbol_removed_text = self.regex_tokenizer.tokenize(text)
+        words = word_tokenize(' '.join(symbol_removed_text))
 
         # Remove stopwords
         filtered_words = [word for word in words if word.lower() not in self.stop_words]
 
         # Lemmatization
-        lemmatized_words = [self.lemmatizer.lemmatize(word) for word in filtered_words]
-
-        return lemmatized_words
+        if lemmatize:
+            lemmatized_words = [self.lemmatizer.lemmatize(word) for word in filtered_words]
+            return lemmatized_words
+        else:
+            return filtered_words
