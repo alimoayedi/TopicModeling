@@ -10,6 +10,7 @@ import CustomFeatureSelection
 from CustomDimensionReduction import CustomDimensionReduction
 from FeatureGenerator import FeatureGenerator
 import CustomFuncLib as cus
+from Summarization import Summarization
 
 from sklearn.feature_selection import SequentialFeatureSelector
 
@@ -79,6 +80,11 @@ dv.dataset_distribution(trainDocs['joined_tokens'])
 
 # print dataset description
 printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics)
+
+
+
+summarization = Summarization.Summarization(#model_name)
+trainDocs['summarize'] = summarization.summarize()
 
 
 
