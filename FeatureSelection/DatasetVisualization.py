@@ -2,18 +2,26 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.lines import Line2D
 import numpy as np
+import pandas as pd
 
 
 class DatasetVisualization:
     def __init__(self):
         pass
 
-    def dataset_distribution(dataset, font_size=10, save=False):
+    def get_descriptive_statistics(self, data):
+        df = pd.DataFrame(data, columns=['Values'])
+        print(df['Values'].describe())
+
+
+    def dataset_distribution(self, dataset, font_size=10, save=False):
 
         documents_length_lst = [len(txt.split(" ")) for txt in dataset]
 
+        self.get_descriptive_statistics(documents_length_lst)
+
         # Create a figure with GridSpec
-        fig = plt.figure(figsize=(4, 6))  # Adjust the figure size as needed
+        fig = plt.figure(figsize=(4, 4))  # Adjust the figure size as needed
         gs = gridspec.GridSpec(5, 1, hspace=0)
         # plt.suptitle('Distribution of The Token Counts', fontsize=12)
         plt.tight_layout(rect=[0, 0, 1, 0.93])  # rect parameter excludes suptitle from tight_layout adjustments

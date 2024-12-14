@@ -4,7 +4,7 @@ import random
 from sklearn.model_selection import train_test_split
 
 from LoadDataset import LoadReutersDataset
-from ReutersPreprocessor import ReutersPreprocessor as rp
+from ReutersPreprocessor import ReutersPreprocessor
 from DataVisualization import DataVisualization as dv
 import CustomFeatureSelection
 from CustomDimensionReduction import CustomDimensionReduction
@@ -63,7 +63,7 @@ num_topics = len(favorite_topics)
 # load original data
 documents_dic, topics_dic = load_original_dataset(path=file_directory + '/reuters21578')
 # preprocess data
-documents, topics = rp.preprocess(documents_dic, topics_dic, num_samples, min_doc_length, favorite_topics)
+documents, topics = ReutersPreprocessor().preprocess(documents_dic, topics_dic, num_samples, min_doc_length, favorite_topics)
 
 # split data into train test and 
 rand = random.randint(10,99)
