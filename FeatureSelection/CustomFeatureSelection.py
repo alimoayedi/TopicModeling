@@ -1,7 +1,6 @@
 from keras.models import Model
 from keras.layers import Input, concatenate, Dense, Flatten, Dropout, Conv1D, MaxPooling1D, AveragePooling1D, Embedding
 from keras.optimizers import Adam
-from scikeras.wrappers import KerasClassifier
 from sklearn.metrics import f1_score, accuracy_score, classification_report
 import numpy as np
 import pandas as pd

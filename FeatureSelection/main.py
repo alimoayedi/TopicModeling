@@ -48,7 +48,7 @@ def printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs
 
 
 # variables
-file_directory = '/content/drive/MyDrive/ColabNotebooks'
+file_directory = '/content/drive/MyDrive/Colab\ Notebooks/PhD\ Thesis'
 num_samples = 2000 # train+test+validation
 test_percentage = 0.2 # percentage of data used for test and validation
 min_doc_length = 6 # smaller docs are removed
@@ -61,7 +61,7 @@ num_topics = len(favorite_topics)
 
 
 # load original data
-documents_dic, topics_dic = load_original_dataset(data_path=file_directory + '/reuters21578')
+documents_dic, topics_dic = load_original_dataset(path=file_directory + '/reuters21578')
 # preprocess data
 documents, topics = rp.preprocess(documents_dic, topics_dic, num_samples, min_doc_length, favorite_topics)
 
@@ -82,9 +82,12 @@ dv.dataset_distribution(trainDocs['joined_tokens'])
 printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics)
 
 
-
-summarization = Summarization.Summarization(#model_name)
-trainDocs['summarize'] = summarization.summarize()
+summarization = Summarization.Summarization()#model_name
+trainDocs['summarize'] = summarization.summarize(trainDocs['joined_tokens'], 
+                                                 original_max_length = 512,
+                                                 sum_max_length = 80,
+                                                 sum_min_length = 50,
+                                                 truncation = True)
 
 
 

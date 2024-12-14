@@ -19,7 +19,7 @@ class ReutersPreprocessor:
     def __replace_with_index(self, lst):
         return [self.favorite_topics.index(topic) for topic in lst if topic in self.favorite_topics ]
 
-    def preprocess(self, documents_dic, topics_dic, num_sample, min_doc_lenght, favorite_topics):
+    def preprocess(self, documents_dic, topics_dic, num_sample, min_doc_length, favorite_topics):
         
         # set favorite variables as a global variable
         self.favorite_topics = favorite_topics
@@ -49,8 +49,8 @@ class ReutersPreprocessor:
         documents['preprocess'] = documents['doc'].apply(lambda text: Tokenizer.tokenize(text, lemmatize=True))
 
         # drop preprocessed documents with length less than 6
-        topics = topics[documents['preprocess'].str.len() > min_doc_lenght]
-        documents = documents[documents['preprocess'].str.len() > min_doc_lenght]
+        topics = topics[documents['preprocess'].str.len() > min_doc_length]
+        documents = documents[documents['preprocess'].str.len() > min_doc_length]
 
         # remove duplicate terms from each document
         # documents['preprocess'] = documents['preprocess'].apply(remove_duplicates_terms)
@@ -66,3 +66,5 @@ class ReutersPreprocessor:
 
         # convert labels into a one-hot coding
         topics['one_hot'] = topics['topics_lst'].apply(lambda topic_lst: list(np.sum(to_categorical(topic_lst, num_classes=len(favorite_topics)), axis=0)))
+
+        return documents, topics

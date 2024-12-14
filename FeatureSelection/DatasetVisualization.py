@@ -1,17 +1,16 @@
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.lines import Line2D
+import numpy as np
 
 
 class DatasetVisualization:
     def __init__(self):
         pass
 
-    def dataset_distribution(dataset, ):
+    def dataset_distribution(dataset, font_size=10, save=False):
 
         documents_length_lst = [len(txt.split(" ")) for txt in dataset]
-
-        font_size = 10
 
         # Create a figure with GridSpec
         fig = plt.figure(figsize=(4, 6))  # Adjust the figure size as needed
@@ -43,5 +42,6 @@ class DatasetVisualization:
         # ax1.set_xticklabels([])
 
         # Show the combined plot
-        plt.savefig("token_distribution_mBART.png", bbox_inches='tight', pad_inches=0, dpi=800)
+        if save:
+            plt.savefig("document_length_distribution.png", bbox_inches='tight', pad_inches=0, dpi=800)
         plt.show()
