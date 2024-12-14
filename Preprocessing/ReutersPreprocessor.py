@@ -1,7 +1,4 @@
-from LoadDataset import LoadReutersDataset
 import Tokenizer
-import CustomFuncLib as cus
-import warnings
 
 import pandas as pd
 import numpy as np
@@ -13,7 +10,6 @@ class ReutersPreprocessor:
 
     def __init__(self):
         self.favorite_topics = None
-        pass
 
     # replace topics with their indexes, unfound topics are replaced by 99!
     def __replace_with_index(self, lst):
