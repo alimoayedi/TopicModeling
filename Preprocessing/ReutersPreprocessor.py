@@ -1,4 +1,4 @@
-import Tokenizer
+from Tokenizer import Tokenizer
 
 import pandas as pd
 import numpy as np
@@ -42,7 +42,7 @@ class ReutersPreprocessor:
         topics = pd.DataFrame(topics.loc[documents.index])
 
         # preprocess data by tokenization and lemmatization
-        documents['preprocess'] = documents['doc'].apply(lambda text: Tokenizer.tokenize(text, lemmatize=True))
+        documents['preprocess'] = documents['doc'].apply(lambda text: Tokenizer().tokenize(text, lemmatize=True))
 
         # drop preprocessed documents with length less than 6
         topics = topics[documents['preprocess'].str.len() > min_doc_length]
