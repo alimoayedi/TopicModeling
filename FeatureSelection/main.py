@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 
 from LoadDataset import LoadReutersDataset
 from ReutersPreprocessor import ReutersPreprocessor
-from DataVisualization import DataVisualization as dv
+from DataVisualization import DataVisualization
 import CustomFeatureSelection
 from CustomDimensionReduction import CustomDimensionReduction
 from FeatureGenerator import FeatureGenerator
@@ -76,7 +76,7 @@ trainDocs, valDocs, trainTopics, valTopcis = train_test_split(trainValDocs, trai
 trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics = load_saved_dataset()
 
 # plots the distribution of documents length after preprocessing
-dv.dataset_distribution(trainDocs['joined_tokens'])
+DataVisualization().dataset_distribution(trainDocs['joined_tokens'])
 
 # print dataset description
 printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics)
