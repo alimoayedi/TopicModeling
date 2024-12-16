@@ -15,13 +15,13 @@ class ReutersPreprocessor:
     def __replace_with_index(self, lst):
         return [self.favorite_topics.index(topic) for topic in lst if topic in self.favorite_topics ]
 
-    def preprocess(self, documents_dic, topics_dic, num_sample, min_doc_length, favorite_topics):
+    def preprocess(self, documents, topics, num_sample, min_doc_length, favorite_topics, lang='english'):
         
         # set favorite variables as a global variable
         self.favorite_topics = favorite_topics
 
-        documents = pd.DataFrame.from_dict(documents_dic, orient='index', columns=['doc'])
-        topics = pd.DataFrame.from_dict(topics_dic, orient='index')
+        documents = pd.DataFrame.from_dict(documents, orient='index', columns=['doc'])
+        topics = pd.DataFrame.from_dict(topics, orient='index')
 
         # # If you want to name the index, you can set the index name
         documents.index.name = 'index'
@@ -42,7 +42,7 @@ class ReutersPreprocessor:
         topics = pd.DataFrame(topics.loc[documents.index])
 
         # preprocess data by tokenization and lemmatization
-        documents['preprocess'] = documents['doc'].apply(lambda text: Tokenizer().tokenize(text, lemmatize=True))
+        documents['preprocess'] = documents['doc'].apply(lambda text: Tokenizer(lang).tokenize(text, lemmatize=True))
 
         # drop preprocessed documents with length less than 6
         topics = topics[documents['preprocess'].str.len() > min_doc_length]
