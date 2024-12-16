@@ -16,7 +16,13 @@ class DatasetVisualization:
 
     def dataset_distribution(self, dataset, font_size=10, save=False):
 
-        documents_length_lst = [len(txt) for txt in dataset]
+        if isinstance(dataset.iloc[0], str):  # Check if it's a string
+            documents_length_lst = [len(txt.split(' ')) for txt in dataset]
+        elif isinstance(dataset.iloc[0], list):  # Check if it's a list
+            documents_length_lst = [len(txt) for txt in dataset]
+        else:
+            raise ValueError("Input must be either a string or a list")  # Raise an error for unsupported types
+            
 
         self.get_descriptive_statistics(documents_length_lst)
 
@@ -34,8 +40,8 @@ class DatasetVisualization:
         ax1.set_ylabel('Frequency', fontsize=font_size)
         ax1.grid(axis='y', linestyle='--')
         ax1.tick_params(axis='both', which='major', labelsize=font_size)
-        yticks = np.arange(0, max(np.histogram(documents_length_lst, bins=range(1, max(documents_length_lst) + 2))[0]), step=10)
-        ax1.set_yticks(yticks)
+        # yticks = np.arange(0, max(np.histogram(documents_length_lst, bins=range(1, max(documents_length_lst) + 2))[0]), step=10)
+        # ax1.set_yticks(yticks)
 
         medianprops = dict(linestyle='-', linewidth=3, color='orange')  # Adjust 'linewidth' as needed
 

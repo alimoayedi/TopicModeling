@@ -14,7 +14,7 @@ class Tokenizer:
         self.lemmatizer = WordNetLemmatizer()
         self.regex_tokenizer = RegexpTokenizer(r'\w+')
 
-    def tokenize(self, text, remove_stopwords, lemmatize):
+    def tokenize(self, text, remove_stopwords, lemmatize) -> list:
         # Tokenize
         symbol_removed_text = self.regex_tokenizer.tokenize(text)
         tokenized = word_tokenize(' '.join(symbol_removed_text))
@@ -23,7 +23,7 @@ class Tokenizer:
         if remove_stopwords:
             stopwords_filtered = [token for token in tokenized if token.lower() not in self.stop_words]
         else:
-            stopwords_filtered = tokenized.split()
+            stopwords_filtered = tokenized
         
 
         # Lemmatization
