@@ -33,18 +33,19 @@ def load_saved_dataset():
 def printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics):
     print("Train Shape:", trainDocs.shape, trainTopics.shape)
     for topic in favorite_topics:
-        length = len(trainTopics.index[trainTopics.applymap(lambda x: x == topic).any(axis=1)])
-        print("Category ", topic, " counts in the train set:", length, "\n")
-    
+        length = len(trainTopics.index[trainTopics.map(lambda x: x == topic).any(axis=1)])
+        print("Category ", topic, " counts in the train set:", length)
+    print("\n")
     print("Validation Shape:", valDocs.shape, valTopcis.shape)
     for topic in favorite_topics:
-        length = len(valTopcis.index[valTopcis.applymap(lambda x: x == topic).any(axis=1)])
-        print("Category ", topic, " counts in the validation set:", length, "\n")
-
+        length = len(valTopcis.index[valTopcis.map(lambda x: x == topic).any(axis=1)])
+        print("Category ", topic, " counts in the validation set:", length)
+    print("\n")
     print("Test Shape:", testDocs.shape, testTopics.shape)
     for topic in favorite_topics:
-        length = len(testTopics.index[testTopics.applymap(lambda x: x == topic).any(axis=1)])
-        print("Category ", topic, " counts in the test set:", length, "\n")
+        length = len(testTopics.index[testTopics.map(lambda x: x == topic).any(axis=1)])
+        print("Category ", topic, " counts in the test set:", length)
+
 
 
 # variables
@@ -59,11 +60,10 @@ num_topics = len(favorite_topics)
 
 
 
-
 # load original data
 documents_dic, topics_dic = load_original_dataset(path=file_directory + '/reuters21578')
 # preprocess data
-documents, topics = ReutersPreprocessor().preprocess(documents_dic, topics_dic, num_samples, min_doc_length, favorite_topics)
+documents, topics = ReutersPreprocessor().preprocess(documents_dic, topics_dic, num_samples, min_doc_length, favorite_topics, )
 
 # split data into train test and 
 rand = random.randint(10,99)
@@ -73,17 +73,20 @@ trainDocs, valDocs, trainTopics, valTopcis = train_test_split(trainValDocs, trai
 
 
 # load preprepared data
-trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics = load_saved_dataset()
+# trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics = load_saved_dataset()
 
 # plots the distribution of documents length after preprocessing
-DataVisualization().dataset_distribution(trainDocs['joined_tokens'])
+DataVisualization().dataset_distribution(trainDocs['preprocess'])
 
 # print dataset description
 printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics)
 
+# #join preprocced tokens to make a string. used in tf-idf and cosine scoring.
+# documents['joined_tokens'] = documents['preprocess'].apply(lambda tokens: " ".join(tokens))
+
 
 summarization = Summarization.Summarization()#model_name
-trainDocs['summarize'] = summarization.summarize(trainDocs['joined_tokens'], 
+trainDocs['summarize'] = summarization.summarize(trainDocs['preprocess'], 
                                                  original_max_length = 512,
                                                  sum_max_length = 80,
                                                  sum_min_length = 50,

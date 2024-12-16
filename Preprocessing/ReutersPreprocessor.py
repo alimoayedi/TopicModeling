@@ -15,7 +15,7 @@ class ReutersPreprocessor:
     def __replace_with_index(self, lst):
         return [self.favorite_topics.index(topic) for topic in lst if topic in self.favorite_topics ]
 
-    def preprocess(self, documents, topics, num_sample, min_doc_length, favorite_topics, lang='english'):
+    def preprocess(self, documents, topics, num_sample, min_doc_length, favorite_topics, remove_stopwords=True, lemmatize=True, lang='english'):
         
         # set favorite variables as a global variable
         self.favorite_topics = favorite_topics
@@ -42,7 +42,7 @@ class ReutersPreprocessor:
         topics = pd.DataFrame(topics.loc[documents.index])
 
         # preprocess data by tokenization and lemmatization
-        documents['preprocess'] = documents['doc'].apply(lambda text: Tokenizer(lang).tokenize(text, lemmatize=True))
+        documents['preprocess'] = documents['doc'].apply(lambda text: Tokenizer(lang).tokenize(text, remove_stopwords, lemmatize))
 
         # drop preprocessed documents with length less than 6
         topics = topics[documents['preprocess'].str.len() > min_doc_length]
@@ -50,9 +50,6 @@ class ReutersPreprocessor:
 
         # remove duplicate terms from each document
         # documents['preprocess'] = documents['preprocess'].apply(remove_duplicates_terms)
-
-        #join preprocced tokens to make a string. used in tf-idf and cosine scoring.
-        documents['joined_tokens'] = documents['preprocess'].apply(lambda tokens: " ".join(tokens))
 
         # combine all the topics into a list
         topics['topics_lst'] = topics.values.tolist()

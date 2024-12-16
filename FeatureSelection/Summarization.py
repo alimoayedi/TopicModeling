@@ -60,8 +60,9 @@ class Summarization:
 
         summarized_texts = []
         for text in tqdm(original_text, desc="Processing texts"):
-            if len(text.split(" ")) > oml:
-                summary = self.__summarize(text,
+            joined_text = " ".join(text)
+            if len(text) > oml:
+                summary = self.__summarize(joined_text,
                                         sum_max_length=smaxl,
                                         sum_min_length=sminl,
                                         truncation_length = truncation_length,
@@ -69,7 +70,7 @@ class Summarization:
                                         )
                 summarized_texts.append(summary)
             else:
-                summarized_texts.append(text)
+                summarized_texts.append(joined_text)
         return summarized_texts
 
 

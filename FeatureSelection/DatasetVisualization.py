@@ -16,7 +16,7 @@ class DatasetVisualization:
 
     def dataset_distribution(self, dataset, font_size=10, save=False):
 
-        documents_length_lst = [len(txt.split(" ")) for txt in dataset]
+        documents_length_lst = [len(txt) for txt in dataset]
 
         self.get_descriptive_statistics(documents_length_lst)
 
