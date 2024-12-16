@@ -14,7 +14,8 @@ class Summarization:
 
     def __summarize(self, text, sum_max_length, sum_min_length, truncation_length, truncation):
         inputs = self._tokenizer.encode(text, return_tensors="pt", max_length=truncation_length, truncation=truncation)
-        summary_ids = self._model.generate(inputs.input_ids,
+        inputs = inputs.to(self.device)
+        summary_ids = self._model.generate(inputs,
                                            num_beams=10,
                                            min_length=sum_min_length,
                                            max_length=sum_max_length,
