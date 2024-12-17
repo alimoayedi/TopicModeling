@@ -121,9 +121,9 @@ class FeatureGenerator():
         self.testDocs['tfidf'] = pd.DataFrame(test_tfidf.apply(cus.create_list, axis=1)).iloc[:, 0].values
 
         # calculate POS tags of vectorized documents in train, validation and test dataset
-        self.trainDocs['pos_tag'] = self.trainDocs['preprocess'].apply(lambda lst: cus.lemmatize(lst))
-        self.valDocs['pos_tag'] = self.valDocs['preprocess'].apply(lambda lst: cus.lemmatize(lst))
-        self.testDocs['pos_tag'] = self.testDocs['preprocess'].apply(lambda lst: cus.lemmatize(lst))
+        self.trainDocs['pos_tag'] = self.trainDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
+        self.valDocs['pos_tag'] = self.valDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
+        self.testDocs['pos_tag'] = self.testDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
 
         self.trainDocs['pos_padded'] = self.trainDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
         self.valDocs['pos_padded'] = self.valDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))

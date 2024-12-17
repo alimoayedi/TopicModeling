@@ -39,16 +39,13 @@ def create_list(row):
     elements = row.iloc[:].tolist()
     return elements
 
-def lemmatize(tokenized_text):
+def pos_tagger(tokenized_text):
     # Perform POS tagging
     pos_tags = nltk.pos_tag(tokenized_text)
 
-    # Initialize WordNetLemmatizer
-    lemmatizer = nltk.WordNetLemmatizer()
-
     # Lemmatize words using POS tags
-    lemmas = []
-    for word, pos_tag in pos_tags:
+    tags = []
+    for _, pos_tag in pos_tags:
         # Map POS tags to WordNet tags
         if pos_tag.startswith('N'):
             wn_tag = 0  # Noun
@@ -62,9 +59,9 @@ def lemmatize(tokenized_text):
             wn_tag = 4  # No specific tag
 
         # Lemmatize the word with WordNet
-        lemmas.append(wn_tag)
+        tags.append(wn_tag)
 
-    return lemmas
+    return tags
 
 def padding(lst, maximum_length):
     return sequence.pad_sequences([lst], maxlen=maximum_length, padding='post')[0]
