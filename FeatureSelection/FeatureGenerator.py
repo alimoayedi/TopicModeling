@@ -80,54 +80,54 @@ class FeatureGenerator():
 
         # Vectorization of the train documents 
         vectorization_model = TextVectorizationModel(apply_cosine_similarity_reduction=False)
-        self.trainDocs['vectorized'] = vectorization_model.fit(self.trainDocs['trimmed'])
-        self.valDocs['vectorized'] = vectorization_model.transform(self.valDocs['trimmed'])
-        self.testDocs['vectorized'] = vectorization_model.transform(self.testDocs['trimmed'])
+        self.trainDocs.loc[:, 'vectorized'] = vectorization_model.fit(self.trainDocs['trimmed'])
+        self.valDocs.loc[:, 'vectorized'] = vectorization_model.transform(self.valDocs['trimmed'])
+        self.testDocs.loc[:, 'vectorized'] = vectorization_model.transform(self.testDocs['trimmed'])
 
         # pad vectorized documents
-        self.trainDocs['vectorized_padded'] = self.trainDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
-        self.valDocs['vectorized_padded'] = self.valDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
-        self.testDocs['vectorized_padded'] = self.testDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
+        self.trainDocs.loc[:,'vectorized_padded'] = self.trainDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
+        self.valDocs.loc[: 'vectorized_padded'] = self.valDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
+        self.testDocs.loc[: 'vectorized_padded'] = self.testDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
         # calculation of the tf score for train, validation and test data
         train_unique_terms = list(set([token for tokenized_doc in self.trainDocs['vectorized'] for token in tokenized_doc]))
         train_tf = pd.DataFrame(
             vectorization_model.tf_matrix[:, train_unique_terms].toarray(), columns=train_unique_terms, index=self.trainDocs.index
             )
-        self.trainDocs['tf'] = pd.DataFrame(train_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
+        self.trainDocs.loc[:,'tf'] = pd.DataFrame(train_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
 
         val_joined_tokens = self.valDocs['trimmed'].apply(cus.join_tokens)
         val_tf_matrix = vectorization_model.count_vectorizer.transform(val_joined_tokens)
         val_tf = pd.DataFrame(
             val_tf_matrix[:, train_unique_terms].toarray(), columns=train_unique_terms, index=self.valDocs.index
             )
-        self.valDocs['tf'] = pd.DataFrame(val_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
+        self.valDocs.loc[:, 'tf'] = pd.DataFrame(val_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
 
         test_joined_tokens = self.testDocs['trimmed'].apply(cus.join_tokens)
         test_tf_matrix = vectorization_model.count_vectorizer.transform(test_joined_tokens)
         test_tf = pd.DataFrame(test_tf_matrix[:, train_unique_terms].toarray(), columns=train_unique_terms, index=self.testDocs.index)
-        self.testDocs['tf'] = pd.DataFrame(test_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
+        self.testDocs.loc[:, 'tf'] = pd.DataFrame(test_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
 
         # calculation of tf-idf score for train, validation, and test sets
         train_tfidf = pd.DataFrame(vectorization_model.tfidf_matrix[:, train_unique_terms].toarray(), columns=train_unique_terms, index=self.trainDocs.index)
-        self.trainDocs['tfidf'] = pd.DataFrame(train_tfidf.apply(cus.create_list, axis=1)).iloc[:, 0].values
+        self.trainDocs.loc[:, 'tfidf'] = pd.DataFrame(train_tfidf.apply(cus.create_list, axis=1)).iloc[:, 0].values
 
         val_tfidf_matrix = vectorization_model.tfidf_vectorizer.transform(val_joined_tokens)
         val_tfidf = pd.DataFrame(val_tfidf_matrix[:, train_unique_terms].toarray(), columns=train_unique_terms, index=self.valDocs.index)
-        self.valDocs['tfidf'] = pd.DataFrame(val_tfidf.apply(cus.create_list, axis=1)).iloc[:, 0].values
+        self.valDocs.loc[:, 'tfidf'] = pd.DataFrame(val_tfidf.apply(cus.create_list, axis=1)).iloc[:, 0].values
 
         test_tfidf_matrix = vectorization_model.tfidf_vectorizer.transform(test_joined_tokens)
         test_tfidf = pd.DataFrame(test_tfidf_matrix[:, train_unique_terms].toarray(), columns=train_unique_terms, index=self.testDocs.index)
-        self.testDocs['tfidf'] = pd.DataFrame(test_tfidf.apply(cus.create_list, axis=1)).iloc[:, 0].values
+        self.testDocs.loc[:, 'tfidf'] = pd.DataFrame(test_tfidf.apply(cus.create_list, axis=1)).iloc[:, 0].values
 
         # calculate POS tags of vectorized documents in train, validation and test dataset
-        self.trainDocs['pos_tag'] = self.trainDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
-        self.valDocs['pos_tag'] = self.valDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
-        self.testDocs['pos_tag'] = self.testDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
+        self.trainDocs.loc[:, 'pos_tag'] = self.trainDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
+        self.valDocs.loc[:, 'pos_tag'] = self.valDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
+        self.testDocs.loc[:, 'pos_tag'] = self.testDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
 
-        self.trainDocs['pos_padded'] = self.trainDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
-        self.valDocs['pos_padded'] = self.valDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
-        self.testDocs['pos_padded'] = self.testDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
+        self.trainDocs.loc[:, 'pos_padded'] = self.trainDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
+        self.valDocs.loc[:, 'pos_padded'] = self.valDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
+        self.testDocs.loc[:, 'pos_padded'] = self.testDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
         token_topic_df = self.__get_term_topic_df(self.trainDocs['vectorized'], self.trainTopics, train_unique_terms, multi_label=False)
         token_topic_weight_df = self.__get_term_topic_weights(self.trainDocs['vectorized'], token_topic_df)
@@ -137,7 +137,7 @@ class FeatureGenerator():
             token_topic_weight_df[topic] = token_topic_weight_df[topic].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
         # concatinate term-topic weights
-        self.trainDocs['term_topic_weight'] = token_topic_weight_df.apply(lambda lst: cus.concatenate_arrays(lst),  axis=1)
+        self.trainDocs.loc[:, 'term_topic_weight'] = token_topic_weight_df.apply(lambda lst: cus.concatenate_arrays(lst),  axis=1)
 
 
         # term-topic weight of validation documents
@@ -149,7 +149,7 @@ class FeatureGenerator():
                 )
             validation_term_topic_df[topic] = validation_term_topic_df[topic].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
-        self.valDocs['term_topic_weight'] = validation_term_topic_df.apply(lambda lst: cus.concatenate_arrays(lst),  axis=1)
+        self.valDocs.loc[:, 'term_topic_weight'] = validation_term_topic_df.apply(lambda lst: cus.concatenate_arrays(lst),  axis=1)
 
 
         # term-topic weight of test documents
@@ -161,7 +161,7 @@ class FeatureGenerator():
                 )
             test_term_topic_df[topic] = test_term_topic_df[topic].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
-        self.testDocs['term_topic_weight'] = test_term_topic_df.apply(lambda lst: cus.concatenate_arrays(lst),  axis=1)
+        self.testDocs.loc[:, 'term_topic_weight'] = test_term_topic_df.apply(lambda lst: cus.concatenate_arrays(lst),  axis=1)
 
 
         pair_vectorizer = TokenPairVectorizer(tuple_size=2)
@@ -182,9 +182,9 @@ class FeatureGenerator():
         # Train (fit) on the training data
         _ , selected_tuples_lst = tuple_selector.fit(train_doc_tuple_df, train_single_label_df)
 
-        self.trainDocs['tuple_2'] = train_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
-        self.valDocs['tuple_2'] = val_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
-        self.testDocs['tuple_2'] = test_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
+        self.trainDocs.loc[:, 'tuple_2'] = train_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
+        self.valDocs.loc[:, 'tuple_2'] = val_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
+        self.testDocs.loc[:, 'tuple_2'] = test_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
 
         return self.trainDocs, self.valDocs, self.testDocs
 
