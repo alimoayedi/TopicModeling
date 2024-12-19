@@ -1,6 +1,7 @@
 from keras.models import Model
 from keras.layers import Input, concatenate, Dense, Flatten, Dropout, Conv1D, MaxPooling1D, AveragePooling1D, Embedding
 from keras.optimizers import Adam
+from scikeras.wrappers import KerasClassifier
 from sklearn.metrics import f1_score, accuracy_score, classification_report
 import numpy as np
 import pandas as pd
@@ -299,10 +300,7 @@ class CustomFeatureSelection:
 
                 if setting['embedding']:
                     input_layer = Input(shape=(feature_dim,))
-                    embedded_layer = Embedding(input_dim=self.global_instances.vocab_size, 
-                                                output_dim=self.global_instances.embedded_output_dim, 
-                                                weights=self.global_instances.embedding_weight, 
-                                                trainable = self.global_instances.trainable)(input_layer)            
+m          
                     passing_layer = embedded_layer
                 else:
                     input_layer = Input(shape=(feature_dim,1))

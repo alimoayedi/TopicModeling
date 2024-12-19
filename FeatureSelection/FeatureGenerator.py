@@ -80,9 +80,9 @@ class FeatureGenerator():
 
         # Vectorization of the train documents 
         vectorization_model = TextVectorizationModel(apply_cosine_similarity_reduction=False)
-        self.trainDocs.loc[:, 'vectorized'] = vectorization_model.fit(self.trainDocs['trimmed'])
-        self.valDocs.loc[:, 'vectorized'] = vectorization_model.transform(self.valDocs['trimmed'])
-        self.testDocs.loc[:, 'vectorized'] = vectorization_model.transform(self.testDocs['trimmed'])
+        self.trainDocs.loc['vectorized'] = vectorization_model.fit(self.trainDocs['trimmed'])
+        self.valDocs.loc['vectorized'] = vectorization_model.transform(self.valDocs['trimmed'])
+        self.testDocs.loc['vectorized'] = vectorization_model.transform(self.testDocs['trimmed'])
 
         # pad vectorized documents
         self.trainDocs.loc[:,'vectorized_padded'] = self.trainDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
