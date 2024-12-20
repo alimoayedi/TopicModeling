@@ -24,7 +24,7 @@ class TextVectorizationModel:
         self.tfidf_matrix = None
     
     def fit(self, df_to_train):
-        df_joined_tokens = df_to_train.apply(cus.join_tokens)
+        df_joined_tokens = df_to_train.apply(lambda tokenized_txt: " ".join(tokenized_txt))
 
         # Fit TF-IDF and Count vectorizer on training data
         self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(df_joined_tokens)
@@ -49,3 +49,6 @@ class TextVectorizationModel:
         return df_to_vectorize.apply(
             lambda lst: cus.vectorize(self.tfidf_vectorizer.vocabulary_, lst)
         )
+    
+    def get_vocab_size(self) -> int:
+        return len(self.tfidf_vectorizer.vocabulary_)

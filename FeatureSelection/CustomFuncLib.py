@@ -12,10 +12,10 @@ def trim_documents(doc, max_length):
     if len(doc) > max_length:
         return doc[:max_length]  # Keep first 256 terms
     else:
-        return doc  # Keep as is
+        return doc  # Keep as it is
 
-def join_tokens(tokens):
-   return " ".join(tokens)
+# def join_tokens(tokens):
+#    return " ".join(tokens)
 
 def white_space_splitter(text):
     return text.split()

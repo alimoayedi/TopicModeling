@@ -23,6 +23,7 @@ class FeatureGenerator():
         self.trainTopics = None
         self.valDocs = None
         self.testDocs = None
+        self.vocab_size = None
     
     def setDataset(self, train, trainTopics, validation, test):
         self.trainDocs = train
@@ -73,14 +74,16 @@ class FeatureGenerator():
 
         # Vectorization of the train documents 
         vectorization_model = TextVectorizationModel(apply_cosine_similarity_reduction=False)
-        self.trainDocs.loc[:, 'vectorized'] = vectorization_model.fit(self.trainDocs['trimmed'])
-        self.valDocs.loc[:, 'vectorized'] = vectorization_model.transform(self.valDocs['trimmed'])
-        self.testDocs.loc[:, 'vectorized'] = vectorization_model.transform(self.testDocs['trimmed'])
+        self.trainDocs['vectorized'] = vectorization_model.fit(self.trainDocs['trimmed'])
+        self.valDocs['vectorized'] = vectorization_model.transform(self.valDocs['trimmed'])
+        self.testDocs['vectorized'] = vectorization_model.transform(self.testDocs['trimmed'])
+        
+        self.vocab_size = vectorization_model.get_vocab_size()
 
         # pad vectorized documents
         self.trainDocs.loc[:,'vectorized_padded'] = self.trainDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
-        self.valDocs.loc[: 'vectorized_padded'] = self.valDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
-        self.testDocs.loc[: 'vectorized_padded'] = self.testDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
+        self.valDocs.loc[:, 'vectorized_padded'] = self.valDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
+        self.testDocs.loc[:, 'vectorized_padded'] = self.testDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
         # calculation of the tf score for train, validation and test data
         train_unique_terms = list(set([token for tokenized_doc in self.trainDocs['vectorized'] for token in tokenized_doc]))
