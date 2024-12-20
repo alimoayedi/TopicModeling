@@ -53,7 +53,7 @@ file_directory = '/content/drive/MyDrive/Colab\ Notebooks/PhD\ Thesis'
 num_samples = 2000 # train+test+validation
 test_percentage = 0.2 # percentage of data used for test and validation
 min_doc_length = 6 # smaller docs are removed
-max_doc_length = 256 # maximum doc length for embedding and truncation
+max_doc_length = 100 # maximum doc length for embedding and truncation
 apply_cosine_similarity_reduction = False
 favorite_topics = ['acq', 'corn', 'crude', 'earn']
 num_topics = len(favorite_topics)
@@ -61,25 +61,84 @@ num_topics = len(favorite_topics)
 
 
 # load original data
-documents_dic, topics_dic = load_original_dataset(path=file_directory + '/reuters21578')
+raw_documents, raw_topics = load_original_dataset(path=file_directory + '/reuters21578')
+
+# convert to dataframe
+raw_documents = pd.DataFrame.from_dict(raw_documents, orient='index', columns=['doc'])
+raw_topics = pd.DataFrame.from_dict(raw_topics, orient='index')
+
+# set the index column name
+raw_documents.index.name = 'index'
+raw_topics.index.name = 'index'
+
+# remove all the documents without any specific topic
+topicless_raw_documents = raw_topics.notna().any(axis=1)
+raw_documents = raw_documents[topicless_raw_documents]
+raw_topics = raw_topics[topicless_raw_documents]
+
+# filter documents and keep only the ones with favorite topics
+raw_documents = raw_documents[raw_topics.isin(favorite_topics).any(axis=1)]
+raw_topics = raw_topics[raw_topics.isin(favorite_topics).any(axis=1)]
+
+# take sample of documents
+raw_documents = pd.DataFrame(raw_documents.sample(n=num_samples, random_state=42, replace=False))
+raw_topics = pd.DataFrame(raw_topics.loc[raw_documents.index])
+
+
 # preprocess data
-documents, topics = ReutersPreprocessor().preprocess(documents_dic, topics_dic, num_samples, min_doc_length, favorite_topics, )
-
-# split data into train test and 
-rand = random.randint(10,99)
-trainValDocs, testDocs, trainValTopics, testTopics = train_test_split(documents, topics, test_size=test_percentage, random_state=rand)
-trainDocs, valDocs, trainTopics, valTopcis = train_test_split(trainValDocs, trainValTopics, test_size=test_percentage, random_state=rand)
-
-
-
-# load preprepared data
-# trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics = load_saved_dataset()
+documents, topics = ReutersPreprocessor().preprocess(documents=raw_documents,
+                                                     topics=raw_topics,
+                                                     min_doc_length=min_doc_length,
+                                                     favorite_topics=favorite_topics,
+                                                     remove_stopwords=True,
+                                                     lemmatize=True,
+                                                     lang='english')
 
 # plots the distribution of documents length after preprocessing
-DataVisualization().dataset_distribution(trainDocs['preprocess'])
+DataVisualization().dataset_distribution(documents['preprocess'])
 
-# print dataset description
-printDatasetDescription(trainDocs, trainTopics, valDocs, valTopcis, testDocs, testTopics)
+
+# summarize documents
+# summarization = Summarization('facebook/bart-large-cnn')#model_name
+# documents['summarized'] = summarization.summarize(documents['preprocess'],
+#                                                  oml= 100,
+#                                                  smaxl=100,
+#                                                  sminl=50,
+#                                                  truncation_length=512,
+#                                                  truncation=True)
+
+
+# documents.to_pickle("documents_summarized.pkl")
+# topics.to_pickle("topics.pkl")
+
+# Load the DataFrame back
+# documents = pd.read_pickle("documents_summarized.pkl")
+# topics = pd.read_pickle("topics.pkl")
+
+# plots the distribution of documents length after summarization
+DataVisualization().dataset_distribution(dataset = documents['summarized'])
+
+# tokenize summarized texts as we use tokenized document for classification and feature generation
+documents['tokenize_summary']=documents['summarize'].apply(lambda txt: txt.split(' '))
+
+# only one label is saved. Single labeled classification for now. :)
+topics['topic'] = topics['topics_lst'].apply(lambda lst: lst[0])
+
+
+# if smaller set of summarized documents required.
+# documents = pd.DataFrame(documents.sample(n=500, random_state=42, replace=False))
+# topics = pd.DataFrame(topics.loc[documents.index])
+
+
+
+
+
+# # split data into train test and 
+# rand = random.randint(10,99)
+# trainValDocs, testDocs, trainValTopics, testTopics = train_test_split(documents, topics, test_size=test_percentage, random_state=rand)
+# trainDocs, valDocs, trainTopics, valTopcis = train_test_split(trainValDocs, trainValTopics, test_size=test_percentage, random_state=rand)
+
+
 
 # #join preprocced tokens to make a string. used in tf-idf and cosine scoring.
 # documents['joined_tokens'] = documents['preprocess'].apply(lambda tokens: " ".join(tokens))
@@ -100,10 +159,10 @@ feature_generator = FeatureGenerator(max_doc_length=max_doc_length,
 
 feature_generator.setDataset(train=trainDocs, trainTopics=trainTopics['topics_lst'], validation=valDocs, test=testDocs)
 
-trainDocs['trimmed'], valDocs['trimmed'], testDocs['trimmed'] = feature_generator.truncate_documents(trainDocs['preprocess'], 
-                                                                                                  valDocs['preprocess'], 
-                                                                                                  testDocs['preprocess'], 
-                                                                                                  max_doc_length)
+trainDocs.loc[:, 'trimmed'] = trainDocs['preprocess'].apply(lambda doc: cus.trim_documents(doc, max_doc_length))
+valDocs.loc[:, 'trimmed'] = valDocs['preprocess'].apply(lambda doc: cus.trim_documents(doc, max_doc_length))
+testDocs.loc[:, 'trimmed'] = testDocs['preprocess'].apply(lambda doc: cus.trim_documents(doc, max_doc_length))
+
 trainDocs, valDocs, testDocs = feature_generator.generateFeatures()
 
 

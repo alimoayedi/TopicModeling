@@ -300,7 +300,10 @@ class CustomFeatureSelection:
 
                 if setting['embedding']:
                     input_layer = Input(shape=(feature_dim,))
-m          
+                    embedded_layer = Embedding(input_dim=self.global_instances.vocab_size, 
+                                                output_dim=self.global_instances.embedded_output_dim, 
+                                                weights=self.global_instances.embedding_weight, 
+                                                trainable = self.global_instances.trainable)(input_layer)            
                     passing_layer = embedded_layer
                 else:
                     input_layer = Input(shape=(feature_dim,1))

@@ -30,13 +30,6 @@ class FeatureGenerator():
         self.valDocs = validation
         self.testDocs = test
 
-    def truncate_documents(self, train_df, validate_df, test_df):
-        # truncate document
-        train_truncated = train_df.apply(lambda doc: cus.trim_documents(doc, self.max_doc_length))
-        val_truncated = validate_df.apply(lambda doc: cus.trim_documents(doc, self.max_doc_length))
-        test_truncated = test_df.apply(lambda doc: cus.trim_documents(doc, self.max_doc_length))
-        return train_truncated, val_truncated, test_truncated
-
     def __get_term_topic_df(self, vectorized_df, topics_df, terms_lst, multi_label=False):
         # generate the Term-Topic Dictionary
         vocab_size = cus.get_number_of_tokens(vectorized_df)
@@ -80,9 +73,9 @@ class FeatureGenerator():
 
         # Vectorization of the train documents 
         vectorization_model = TextVectorizationModel(apply_cosine_similarity_reduction=False)
-        self.trainDocs.loc['vectorized'] = vectorization_model.fit(self.trainDocs['trimmed'])
-        self.valDocs.loc['vectorized'] = vectorization_model.transform(self.valDocs['trimmed'])
-        self.testDocs.loc['vectorized'] = vectorization_model.transform(self.testDocs['trimmed'])
+        self.trainDocs.loc[:, 'vectorized'] = vectorization_model.fit(self.trainDocs['trimmed'])
+        self.valDocs.loc[:, 'vectorized'] = vectorization_model.transform(self.valDocs['trimmed'])
+        self.testDocs.loc[:, 'vectorized'] = vectorization_model.transform(self.testDocs['trimmed'])
 
         # pad vectorized documents
         self.trainDocs.loc[:,'vectorized_padded'] = self.trainDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
@@ -94,7 +87,7 @@ class FeatureGenerator():
         train_tf = pd.DataFrame(
             vectorization_model.tf_matrix[:, train_unique_terms].toarray(), columns=train_unique_terms, index=self.trainDocs.index
             )
-        self.trainDocs.loc[:,'tf'] = pd.DataFrame(train_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
+        self.trainDocs.loc[:, 'tf'] = pd.DataFrame(train_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
 
         val_joined_tokens = self.valDocs['trimmed'].apply(cus.join_tokens)
         val_tf_matrix = vectorization_model.count_vectorizer.transform(val_joined_tokens)
