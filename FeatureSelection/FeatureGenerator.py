@@ -92,14 +92,14 @@ class FeatureGenerator():
             )
         self.trainDocs.loc[:, 'tf'] = pd.DataFrame(train_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
 
-        val_joined_tokens = self.valDocs['trimmed'].apply(cus.join_tokens)
+        val_joined_tokens = self.valDocs['trimmed'].apply(lambda txt: " ".join(txt))
         val_tf_matrix = vectorization_model.count_vectorizer.transform(val_joined_tokens)
         val_tf = pd.DataFrame(
             val_tf_matrix[:, train_unique_terms].toarray(), columns=train_unique_terms, index=self.valDocs.index
             )
         self.valDocs.loc[:, 'tf'] = pd.DataFrame(val_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
 
-        test_joined_tokens = self.testDocs['trimmed'].apply(cus.join_tokens)
+        test_joined_tokens = self.testDocs['trimmed'].apply(lambda txt: " ".join(txt))
         test_tf_matrix = vectorization_model.count_vectorizer.transform(test_joined_tokens)
         test_tf = pd.DataFrame(test_tf_matrix[:, train_unique_terms].toarray(), columns=train_unique_terms, index=self.testDocs.index)
         self.testDocs.loc[:, 'tf'] = pd.DataFrame(test_tf.apply(cus.create_list, axis=1)).iloc[:, 0].values
