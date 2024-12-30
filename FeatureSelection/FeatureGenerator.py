@@ -33,28 +33,25 @@ class FeatureGenerator():
 
     def __get_term_topic_df(self, vectorized_df, topics_df, terms_lst, multi_label=False):
         # generate the Term-Topic Dictionary
-        vocab_size = cus.get_number_of_tokens(vectorized_df)
-        token_topic_df = pd.DataFrame(np.zeros(shape=(vocab_size, self.num_topics)), columns=range(self.num_topics), index=terms_lst)
+        token_topic_df = pd.DataFrame(0, index=range(terms_lst), columns=range(self.num_topics), dtype=int)
 
-        for index in self.trainTopics.index:
-            topics_lst = topics_df.loc[index]
+        for index, topics_lst in topics_df.items():
             term_vector = vectorized_df.loc[index]
-            for topic in topics_lst:
-                for term in term_vector:
-                    token_topic_df.loc[term][topic] += 1
+            for term in term_vector:
+                token_topic_df.loc[term, topics_lst] += 1  # Update all relevant topics for the term
         
+
         if not multi_label:
-            for topic in token_topic_df.columns:
-                col_of_topic = token_topic_df[topic] != 0
-                other_cols = token_topic_df.drop(columns=topic).eq(0).all(axis=1)
+            # Filter terms for each topic
+            for topic in range(self.num_topics):
+                topic_counts = token_topic_df[topic]
+                is_only_in_topic = (topic_counts > 0) & (token_topic_df.drop(columns=topic).eq(0).all(axis=1))
 
-                # Combine the conditions
-                condition = col_of_topic & other_cols
-
-                # Mark the rows that meet the condition with 1
-                token_topic_df['mark'] = np.where(condition, 1, 0)
-                topic_terms_index = token_topic_df.sort_values(by=['mark',topic], ascending=False).iloc[100:].index
-                token_topic_df.loc[topic_terms_index, topic] = 0
+                # Mark relevant terms
+                token_topic_df['mark'] = np.where(is_only_in_topic, 1, 0)
+                # Retain the top 100 terms for this topic
+                topic_terms_to_zero = token_topic_df.sort_values(by=['mark', topic], ascending=[False, False]).iloc[100:].index
+                token_topic_df.loc[topic_terms_to_zero, topic] = 0
             token_topic_df.drop(columns='mark', inplace=True)
         
         return token_topic_df
@@ -86,29 +83,29 @@ class FeatureGenerator():
         self.testDocs.loc[:, 'vectorized_padded'] = self.testDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
         # calculation of the tf score for train, validation and test data
-        train_tf = pd.DataFrame(vectorization_model.tf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size), index=self.trainDocs.index)
+        train_tf = pd.DataFrame(vectorization_model.tf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.trainDocs.index)
         self.trainDocs['tf'] = pd.DataFrame(train_tf.apply(cus.create_list, axis=1))
 
         val_joined_tokens = self.valDocs['trimmed'].apply(lambda txt: " ".join(txt))
         val_tf_matrix = vectorization_model.count_vectorizer.transform(val_joined_tokens)
-        val_tf = pd.DataFrame(val_tf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size), index=self.valDocs.index)
+        val_tf = pd.DataFrame(val_tf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.valDocs.index)
         self.valDocs['tf'] = pd.DataFrame(val_tf.apply(cus.create_list, axis=1))
 
         test_joined_tokens = self.testDocs['trimmed'].apply(lambda txt: " ".join(txt))
         test_tf_matrix = vectorization_model.count_vectorizer.transform(test_joined_tokens)
-        test_tf = pd.DataFrame(test_tf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size), index=self.testDocs.index)
+        test_tf = pd.DataFrame(test_tf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.testDocs.index)
         self.testDocs['tf'] = pd.DataFrame(test_tf.apply(cus.create_list, axis=1))
 
         # calculation of tf-idf score for train, validation, and test sets
-        train_tfidf = pd.DataFrame(vectorization_model.tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size), index=self.trainDocs.index)
+        train_tfidf = pd.DataFrame(vectorization_model.tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.trainDocs.index)
         self.trainDocs['tfidf'] = pd.DataFrame(train_tfidf.apply(cus.create_list, axis=1))
 
         val_tfidf_matrix = vectorization_model.tfidf_vectorizer.transform(val_joined_tokens)
-        val_tfidf = pd.DataFrame(val_tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size), index=self.valDocs.index)
+        val_tfidf = pd.DataFrame(val_tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.valDocs.index)
         self.valDocs['tfidf'] = pd.DataFrame(val_tfidf.apply(cus.create_list, axis=1))
 
         test_tfidf_matrix = vectorization_model.tfidf_vectorizer.transform(test_joined_tokens)
-        test_tfidf = pd.DataFrame(test_tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size), index=self.testDocs.index)
+        test_tfidf = pd.DataFrame(test_tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.testDocs.index)
         self.testDocs['tfidf'] = pd.DataFrame(test_tfidf.apply(cus.create_list, axis=1))
 
         # calculate POS tags of vectorized documents in train, validation and test dataset
@@ -120,7 +117,7 @@ class FeatureGenerator():
         self.valDocs.loc[:, 'pos_padded'] = self.valDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
         self.testDocs.loc[:, 'pos_padded'] = self.testDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
-        token_topic_df = self.__get_term_topic_df(self.trainDocs['vectorized'], self.trainTopics, vectorization_model.get_vocab_size, multi_label=False)
+        token_topic_df = self.__get_term_topic_df(self.trainDocs['vectorized'], self.trainTopics, vectorization_model.get_vocab_size(), multi_label=False)
         token_topic_weight_df = self.__get_term_topic_weights(self.trainDocs['vectorized'], token_topic_df)
 
         # term-topic weight of train documents
