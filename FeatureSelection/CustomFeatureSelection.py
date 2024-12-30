@@ -512,6 +512,9 @@ class CustomFeatureSelection:
                                          dense_settings=dense_settings)
                     
             train_array = [np.stack(self.global_instances.train_df[feature]) for feature in features]
+            
+            print("Shape of train_array[0]:", train_array[0].shape) 
+            print("Expected shape:", (None, self.global_instances.vocab_size))
 
             self.global_instances.model.fit(train_array, self.global_instances.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
                     
