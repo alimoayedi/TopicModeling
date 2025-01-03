@@ -24,6 +24,7 @@ class FeatureGenerator():
         self.valDocs = None
         self.testDocs = None
         self.vocab_size = None
+        self.selected_tuple_count = None
     
     def setDataset(self, train, trainTopics, validation, test):
         self.trainDocs = train
@@ -171,9 +172,10 @@ class FeatureGenerator():
         # Train (fit) on the training data
         _ , selected_tuples_lst = tuple_selector.fit(train_doc_tuple_df, train_single_label_df)
 
+        self.selected_tuple_count = len(selected_tuples_lst)
+
         self.trainDocs.loc[:, 'tuple_2'] = train_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
         self.valDocs.loc[:, 'tuple_2'] = val_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
         self.testDocs.loc[:, 'tuple_2'] = test_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
 
         return vectorization_model, self.trainDocs, self.valDocs, self.testDocs
-
