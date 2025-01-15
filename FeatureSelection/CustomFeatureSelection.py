@@ -400,32 +400,30 @@ class CustomFeatureSelection:
             if not isinstance(dense_settings,  pd.DataFrame):
                 raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
 
-            selected_features = self.global_instances.train_df.columns.to_list()
+            selected_features = set(self.global_instances.train_df.columns)
             
+            self.__trainModel(selected_features, 
+                    features_settings.loc[list(selected_features)], 
+                    dense_settings, 
+                    epochs, 
+                    batch_size)
+
+            validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in selected_features]
+
+            # Evaluate model on validation data
+            score = self.global_instances.evaluate_model(validate_array)
+
+            self.global_instances.print_performance(selected_features, score)
+
+            best_score = score[evaluation]
+            best_combination = selected_features
+
             while len(selected_features) > 1:
-                
-                self.__trainModel(selected_features, 
-                                  features_settings, 
-                                  dense_settings, 
-                                  epochs, 
-                                  batch_size)
-
-                validate_array = [np.stack(self.global_instances.test_df[feature]) for feature in selected_features]
-
-                # Evaluate model on validation data
-                score = self.global_instances.evaluate_model(validate_array)
-
-                self.global_instances.print_performance(selected_features, score)
-
-                best_score = score[evaluation]
-                selected_features = set(selected_features)
-                best_combination = selected_features
-                
                 for feature in selected_features:
-                    current_features = list(selected_features - {feature})
+                    current_features = selected_features - {feature}
                     
                     self.__trainModel(current_features,
-                                      features_settings.loc[current_features],
+                                      features_settings.loc[list(current_features)],
                                       dense_settings,
                                       epochs,
                                       batch_size)
@@ -437,7 +435,7 @@ class CustomFeatureSelection:
 
                     if score[evaluation] > best_score:
                         best_score = score[evaluation]
-                        best_combination = set(current_features)
+                        best_combination = current_features
 
                     self.global_instances.print_performance(current_features, score)
                 
