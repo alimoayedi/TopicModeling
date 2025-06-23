@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 
 from LoadDataset import LoadReutersDataset
 from ReutersPreprocessor import ReutersPreprocessor
-from DataVisualization import DataVisualization
+from DatasetVisualization import DatasetVisualization
 import CustomFeatureSelection
 from CustomDimensionReduction import CustomDimensionReduction
 from FeatureGenerator import FeatureGenerator
@@ -95,7 +95,7 @@ documents, topics = ReutersPreprocessor().preprocess(documents=raw_documents,
                                                      lang='english')
 
 # plots the distribution of documents length after preprocessing
-DataVisualization().dataset_distribution(documents['preprocess'])
+DatasetVisualization().dataset_distribution(documents['preprocess'])
 
 
 # summarize documents
@@ -116,7 +116,7 @@ DataVisualization().dataset_distribution(documents['preprocess'])
 # topics = pd.read_pickle("topics.pkl")
 
 # plots the distribution of documents length after summarization
-DataVisualization().dataset_distribution(dataset = documents['summarized'])
+DatasetVisualization().dataset_distribution(dataset = documents['summarized'])
 
 # tokenize summarized texts as we use tokenized document for classification and feature generation
 documents['tokenize_summary']=documents['summarize'].apply(lambda txt: txt.split(' '))

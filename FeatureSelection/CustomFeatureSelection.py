@@ -1,5 +1,7 @@
 from keras.models import Model
-from keras.layers import Input, concatenate, Dense, Flatten, Dropout, Conv1D, MaxPooling1D, AveragePooling1D, Embedding
+from keras.layers import (Input, concatenate, Dense, Flatten, 
+                          Dropout, Conv1D, MaxPooling1D, AveragePooling1D, 
+                          Embedding, BatchNormalization, Lambda, Multiply)
 from keras.optimizers import Adam
 from sklearn.metrics import f1_score, accuracy_score, classification_report
 import numpy as np
@@ -274,7 +276,7 @@ class CustomFeatureSelection:
         def __init__(self, global_instances):
             self.global_instances = global_instances
             
-        def __customAdjustableModel(self, features, settings, dense_settings):
+        def __customAdjustableModel(self, features, settings, dense_settings, lda_settings):
             # saves inputs and layers
             inputs = []
             layers_to_concatinate = []
@@ -311,13 +313,41 @@ class CustomFeatureSelection:
                 inputs.append(input_layer)
                 
                 for param_set in model_hyper_parameters:
+                    passing_layer = BatchNormalization(name="First Normalization")(passing_layer)
                     passing_layer = Conv1D(filters=param_set[0], kernel_size=param_set[1], activation='relu', padding='same')(passing_layer)
                     passing_layer = AveragePooling1D(pool_size=param_set[2])(passing_layer)
 
                 flatten_layer = Flatten()(passing_layer)
 
                 layers_to_concatinate.append(flatten_layer)
-            
+
+            # TODO LDA comes here!
+            if lda_settings is not None:
+                lda_inp = Input(shape=(self.global_instances.num_classes,), name='lda_input')
+                x_lda = BatchNormalization(name="lda_bn_input")(lda_inp)
+                x_lda = Dense(lda_settings.get("lda_dense"), activation='relu', name="lda_proj")(x_lda)
+                x_lda = Dropout(lda_settings.get("lda_dropout"), name="lda_dropout")(x_lda)
+                x_lda = BatchNormalization(name="lda_bn_proj")(x_lda)
+                
+                if not lda_settings.get("gating"):
+                    inputs.append(lda_inp)
+                    layers_to_concatinate.append(x_lda)  # shape (None, lda_proj_dim)
+                else:
+                    gate_hidden = Dense(max(16, self.global_instances.num_classes), activation='relu', name="gate_hidden")(x_lda)
+                    gate_vector = Dense(len(layers_to_concatinate), activation='sigmoid', name="branch_gate")(gate_hidden)
+
+                    gated_layers_to_concatinate = []
+
+                    for index, branch in enumerate(layers_to_concatinate):
+                        # Extract gate scalar for branch i
+                        # Using Lambda to slice: gate_vector[:, i:i+1]
+                        gate_i = Lambda(lambda vector, idx=index: vector[:, idx:idx+1], name=f"gate_slice_{index}")(gate_vector)
+                        # Multiply branch representation by gate scalar (broadcast)
+                        gated_branch = Multiply(name=f"gated_branch_{index}")([branch, gate_i])
+                        gated_layers_to_concatinate.append(gated_branch)
+                    
+                    layers_to_concatinate = gated_layers_to_concatinate
+
             if len(layers_to_concatinate) > 1:
                 merged = concatenate(layers_to_concatinate)
             else:
@@ -329,6 +359,7 @@ class CustomFeatureSelection:
                 passing_layer = Dense(dense_setting[0], activation='relu')(passing_layer)
                 passing_layer = Dropout(0.1)(passing_layer)
 
+            passing_layer = BatchNormalization(name="Last C Normalization")(passing_layer)
             output_layer = Dense(self.global_instances.num_classes, activation='softmax')(passing_layer)
 
             # Compile the model
@@ -338,7 +369,7 @@ class CustomFeatureSelection:
             # self.global_instances.model.summary()
             
         
-        def forward_selection(self, features_settings, dense_settings, evaluation = 'accuracy', epochs=5, batch_size=32):
+        def forward_selection(self, features_settings, dense_settings, lda_settings = None, evaluation = 'accuracy', epochs=5, batch_size=32):
             if not isinstance(self.global_instances.train_df,  pd.DataFrame):
                 raise ValueError("train type must be a pandas dataframe")
             
@@ -346,10 +377,13 @@ class CustomFeatureSelection:
                 raise ValueError("test type must be a pandas dataframe")
             
             if not isinstance(features_settings,  pd.DataFrame):
-                raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
+                raise ValueError("settings type must be a pandas dataframe, including filter_size, kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
             
             if not isinstance(dense_settings,  pd.DataFrame):
-                raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
+                raise ValueError("settings type must be a pandas dataframe, including dense list and dropout list")
+            
+            if not isinstance(lda_settings,  pd.DataFrame):
+                raise ValueError("settings type must be a pandas dataframe, including gating(boolean), dense_size, and dropout")
 
             # gets the list of features
             remained_features = self.global_instances.train_df.columns.to_list()
@@ -364,6 +398,7 @@ class CustomFeatureSelection:
                     self.__trainModel(current_features,
                                       features_settings.loc[current_features],
                                       dense_settings,
+                                      lda_settings,
                                       epochs,
                                       batch_size)
                     
@@ -504,10 +539,11 @@ class CustomFeatureSelection:
 
             return current_features, current_score 
 
-        def __trainModel(self, features, settings, dense_settings, epochs, batch_size):
+        def __trainModel(self, features, settings, dense_settings, lda_settings, epochs, batch_size):
             self.__customAdjustableModel(features=features,
                                          settings=settings,
-                                         dense_settings=dense_settings)
+                                         dense_settings=dense_settings,
+                                         lda_settings=lda_settings)
                     
             train_array = [np.stack(self.global_instances.train_df[feature]) for feature in features]
 
