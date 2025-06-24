@@ -223,6 +223,11 @@ dense_settings = {
 # convert dense dictionary into a dataframe
 dense_settings = pd.DataFrame(dense_settings)
 
+lda_settings = {
+    'gating': False,
+    'lda_dense': 64,
+    'lda_dropout': 0.1
+    }
 
 fs = CustomFeatureSelection.CustomFeatureSelection(train_df=train_selected_features,
                                                    train_labels=train_labels_array,

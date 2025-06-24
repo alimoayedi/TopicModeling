@@ -321,13 +321,12 @@ class CustomFeatureSelection:
 
                 layers_to_concatinate.append(flatten_layer)
 
-            # TODO LDA comes here!
             if lda_settings is not None:
                 lda_inp = Input(shape=(self.global_instances.num_classes,), name='lda_input')
-                x_lda = BatchNormalization(name="lda_bn_input")(lda_inp)
+                x_lda = BatchNormalization(name="lda_batch_input")(lda_inp)
                 x_lda = Dense(lda_settings.get("lda_dense"), activation='relu', name="lda_proj")(x_lda)
                 x_lda = Dropout(lda_settings.get("lda_dropout"), name="lda_dropout")(x_lda)
-                x_lda = BatchNormalization(name="lda_bn_proj")(x_lda)
+                x_lda = BatchNormalization(name="lda_batch_proj")(x_lda)
                 
                 if not lda_settings.get("gating"):
                     inputs.append(lda_inp)

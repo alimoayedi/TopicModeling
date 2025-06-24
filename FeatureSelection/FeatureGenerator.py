@@ -9,6 +9,8 @@ import pandas as pd
 import numpy as np
 
 from sklearn.svm import LinearSVR
+from sklearn.decomposition import LatentDirichletAllocation
+
 from xgboost import XGBClassifier
 
 
@@ -65,6 +67,19 @@ class FeatureGenerator():
             token_topic_weight[topic] = vectorized_df.apply(lambda lst: [token_topic_df.loc[term][topic] for term in lst])
         
         return token_topic_weight
+    
+    def __fit_lda(train_bow, val_bow, test_bow, num_topics):
+        """
+        Fit LDA on training bow data and infer topic distributions for train & val.
+        texts_*_bow: document-term matrix (counts) for LDA fitting/inference.
+        Returns: theta_train (n_train, num_topics), theta_val (n_val, num_topics), lda_model.
+        """
+        lda_model = LatentDirichletAllocation(n_components=num_topics, random_state=42)
+        theta_train = lda_model.fit_transform(train_bow)  # shape (n_train, num_topics)
+        theta_val = lda_model.transform(val_bow)      # shape (n_val, num_topics)
+        theta_test = lda_model.transform(test_bow)      # shape (n_val, num_topics)
+        # Note: transform returns distributions (rows sum to 1).
+        return lda_model, theta_train, theta_val, theta_test
 
     def generateFeatures(self):
         # TODO trimmed documents are in form of list. We need to join the tokens and form the texts again.
@@ -107,6 +122,15 @@ class FeatureGenerator():
         test_tfidf_matrix = vectorization_model.tfidf_vectorizer.transform(test_joined_tokens)
         test_tfidf = pd.DataFrame(test_tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.testDocs.index)
         self.testDocs['tfidf'] = pd.DataFrame(test_tfidf.apply(cus.create_list, axis=1))
+
+        lda_model, lda_theta_train, lda_theta_val, lda_theta_tost = self.__fit_lda(self.trainDocs['tf'].to_list(),
+                                                                                   self.valDocs['tf'].to_list(),
+                                                                                   self.testDocs['tf'].to_list(),
+                                                                                   self.num_topics)
+        
+        self.trainDocs['lda'] = (pd.DataFrame(lda_theta_train, index=self.trainDocs.index)).apply(cus.create_list, axis=1)
+        self.valDocs['lda'] = (pd.DataFrame(lda_theta_val, index=self.valDocs.index)).apply(cus.create_list, axis=1)
+        self.testDocs['lda'] = (pd.DataFrame(lda_theta_tost, index=self.testDocs.index)).apply(cus.create_list, axis=1)
 
         # calculate POS tags of vectorized documents in train, validation and test dataset
         self.trainDocs.loc[:, 'pos_tag'] = self.trainDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
@@ -176,4 +200,4 @@ class FeatureGenerator():
         self.valDocs.loc[:, 'tuple_2'] = val_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
         self.testDocs.loc[:, 'tuple_2'] = test_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
 
-        return vectorization_model, self.trainDocs, self.valDocs, self.testDocs
+        return vectorization_model, lda_model, self.trainDocs, self.valDocs, self.testDocs
