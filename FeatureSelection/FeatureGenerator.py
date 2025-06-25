@@ -68,7 +68,7 @@ class FeatureGenerator():
         
         return token_topic_weight
     
-    def __fit_lda(train_bow, val_bow, test_bow, num_topics):
+    def __fit_lda(self, train_bow, val_bow, test_bow, num_topics):
         """
         Fit LDA on training bow data and infer topic distributions for train & val.
         texts_*_bow: document-term matrix (counts) for LDA fitting/inference.
