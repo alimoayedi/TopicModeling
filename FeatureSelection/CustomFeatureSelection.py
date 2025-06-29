@@ -291,7 +291,7 @@ class CustomFeatureSelection:
 
                 if feature == 'lda':
                     inputs.append(self.global_instances.lda_input)
-                    x_lda = Flatten()(self.global_instances.lda_layer)
+                    x_lda = Flatten()(self.global_instances.lda_branch)
                     layers_to_concatinate.append(x_lda)  # shape (None, lda_proj_dim)
                     continue
 
@@ -322,8 +322,10 @@ class CustomFeatureSelection:
                 
                 inputs.append(input_layer)
                 
+                if setting['normalize']:
+                        passing_layer = BatchNormalization()(passing_layer)
+                        
                 for param_set in model_hyper_parameters:
-                    passing_layer = BatchNormalization()(passing_layer)
                     passing_layer = Conv1D(filters=param_set[0], kernel_size=param_set[1], activation='relu', padding='same')(passing_layer)
                     passing_layer = AveragePooling1D(pool_size=param_set[2])(passing_layer)
 
@@ -333,7 +335,7 @@ class CustomFeatureSelection:
             
             if lda_gating:
                 # apply lda gating
-                x_lda = self.global_instances.lda_layer
+                x_lda = self.global_instances.lda_branch
                 gate_hidden = Dense(max(16, self.global_instances.num_classes), activation='relu', name="gate_hidden")(x_lda)
                 gate_vector = Dense(len(layers_to_concatinate), activation='sigmoid', name="branch_gate")(gate_hidden)
 
@@ -361,7 +363,6 @@ class CustomFeatureSelection:
                 passing_layer = Dense(dense_setting[0], activation='relu')(passing_layer)
                 passing_layer = Dropout(0.1)(passing_layer)
 
-            passing_layer = BatchNormalization()(passing_layer)
             output_layer = Dense(self.global_instances.num_classes, activation='softmax')(passing_layer)
 
             # Compile the model
@@ -401,7 +402,6 @@ class CustomFeatureSelection:
 
                 self.global_instances.lda_input = lda_inp
                 self.global_instances.lda_branch = x_lda
-                if not lda_settings.get('gating'): remained_features.append("lda")
 
             while remained_features:
                 best_feature = None
