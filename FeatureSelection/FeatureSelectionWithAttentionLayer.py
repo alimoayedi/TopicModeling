@@ -6,7 +6,7 @@ from keras.layers import (Input, concatenate, Dense, Flatten,
 from tensorflow.keras.layers import (Input, concatenate, Dense, Flatten, 
                                      Dropout, Embedding, BatchNormalization, 
                                      Lambda, Multiply, MultiHeadAttention, 
-                                     LayerNormalization, GlobalAveragePooling1D) # Added MultiHeadAttention, LayerNormalization, and GlobalAveragePooling1D
+                                     LayerNormalization, GlobalAveragePooling1D, GlobalMaxPooling1D) # Added MultiHeadAttention, LayerNormalization, and GlobalAveragePooling1D
 
 import tensorflow as tf
 from keras.optimizers import Adam
@@ -14,6 +14,35 @@ from sklearn.metrics import f1_score, accuracy_score, classification_report
 import numpy as np
 import pandas as pd
 import random
+
+import numpy as np
+
+class GraphConvolution(tf.keras.layers.Layer):
+    def __init__(self, units, adjacency_matrix, **kwargs):
+        super(GraphConvolution, self).__init__(**kwargs)
+        self.units = units
+        
+        # Calculate the Normalized Graph Laplacian (Standard GCN math)
+        A_hat = adjacency_matrix + np.eye(adjacency_matrix.shape[0]) # Add self-loops
+        D_hat = np.array(np.sum(A_hat, axis=1)).flatten() # Degree matrix
+        D_half_inv = np.diag(np.power(D_hat, -0.5))
+        A_norm = np.dot(D_half_inv, np.dot(A_hat, D_half_inv))
+        
+        # Store as a non-trainable constant tensor
+        self.A_norm = tf.constant(A_norm, dtype=tf.float32)
+
+    def build(self, input_shape):
+        self.W = self.add_weight(shape=(input_shape[-1], self.units),
+                                 initializer='glorot_uniform', trainable=True)
+        self.b = self.add_weight(shape=(self.units,),
+                                 initializer='zeros', trainable=True)
+
+    def call(self, inputs):
+        # inputs shape: (batch_size, num_nodes, feature_dim)
+        xw = tf.matmul(inputs, self.W) 
+        # Multiply graph structure by node features using Einstein summation
+        out = tf.einsum('ij,bjk->bik', self.A_norm, xw)
+        return tf.nn.relu(out + self.b)
 
 
 class CustomFeatureSelection:
@@ -395,6 +424,23 @@ class CustomFeatureSelection:
                     dense_out = Dropout(0.4)(dense_out)
                     
                     layers_to_concatinate.append(dense_out)
+
+                elif model_type == 'graph':
+                    # C. Graph Convolution Branch (For Co-occurrence Tuples)
+                    A = setting['adjacency_matrix']
+                    
+                    # Reshape the flat tuple array (batch, N) into node features (batch, N, 1)
+                    graph_x = tf.keras.layers.Reshape((feature_dim, 1))(passing_layer)
+                    
+                    # Pass through 2 layers of Message Passing
+                    graph_x = GraphConvolution(ff_dim, A)(graph_x)
+                    graph_x = Dropout(0.3)(graph_x)
+                    graph_x = GraphConvolution(ff_dim // 2, A)(graph_x)
+                    
+                    # Compress the graph nodes back into a flat vector for concatenation
+                    branch_output = GlobalMaxPooling1D()(graph_x)
+                    layers_to_concatinate.append(branch_output)
+
 # end of update
             if lda_gating:
                 # apply lda gating

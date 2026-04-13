@@ -25,6 +25,7 @@ class FeatureGenerator():
         self.testDocs = None
         self.vocab_size = None
         self.selected_tuple_count = None
+        self.global_adjacency_matrix = None
     
     def setDataset(self, train, trainTopics, validation, test):
         self.trainDocs = train
@@ -195,6 +196,29 @@ class FeatureGenerator():
         _ , selected_tuples_lst = tuple_selector.fit(train_doc_tuple_df, train_single_label_df)
 
         self.selected_tuple_count = len(selected_tuples_lst)
+
+### NEW CODE STARTS HERE ###
+
+        print("Constructing Graph Adjacency Matrix for tuples...")
+
+        # Initialize an empty matrix of size (N_tuples, N_tuples)
+        A = np.zeros((self.selected_tuple_count, self.selected_tuple_count), dtype=np.float32)
+        
+        # Pre-split the tuples into sets of words for faster comparison
+        tuple_word_sets = [set(t) for t in selected_tuples_lst]
+        
+        # Connect tuples (edges) if they share a common word
+        for i in range(self.selected_tuple_count):
+            for j in range(i + 1, self.selected_tuple_count):
+                if not tuple_word_sets[i].isdisjoint(tuple_word_sets[j]):
+                    A[i, j] = 1.0
+                    A[j, i] = 1.0 # The graph is undirected
+                    
+        self.global_adjacency_matrix = A
+        print("Graph Construction Complete.")
+        # --- END NEW CODE ---
+
+### NEW CODE ENDS HERE ###
 
         self.trainDocs.loc[:, 'tuple_2'] = train_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
         self.valDocs.loc[:, 'tuple_2'] = val_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)

@@ -182,16 +182,25 @@ validation_labels_array = np.array(valTopcis['one_hot'].tolist())
 # number of unique terms in the whole database
 vocab_size = cus.get_number_of_tokens(trainDocs['vectorized_padded'])
 
+dim_term_topic = feature_generator.num_topics * feature_generator.max_doc_length
+dim_tuple_2 = feature_generator.selected_tuple_count
+A_matrix = feature_generator.global_adjacency_matrix # Grab the graph structure
+
 # settings that are used for training the NN model.
 # more layers for each feature can be added, however, the number of
 # layers for different parameters must match
 feature_settings={
-    'model_type': ['transformer', 'transformer', 'transformer', 'dense', 'dense', 'dense', 'dense'],
-    'num_transformer_blocks': [1, 1, 1, 0, 0, 0, 0],  # Reduced from 2 to 1 to prevent overfitting
-    'num_heads': [2, 2, 2, 0, 0, 0, 0],               # Reduced from 4 to 2 to prevent overfitting
-    'ff_dim': [128, 128, 128, 128, 128, 128, 128],    # Used by both Transformer FFN and Dense branches
+    # Change the 7th model_type from 'dense' to 'graph'
+    'model_type': ['transformer', 'transformer', 'transformer', 'dense', 'dense', 'dense', 'graph'],
+    'num_transformer_blocks': [1, 1, 1, 0, 0, 0, 0],  
+    'num_heads': [2, 2, 2, 0, 0, 0, 0],               
+    'ff_dim': [128, 128, 128, 128, 128, 128, 128],    
     'embedding': [False, True, False, False, False, False, False],
-    'feature_dim': [max_doc_length, max_doc_length, max_doc_length, vocab_size, vocab_size, 1024, 4578]
+    'normalize': [False, False, False, True, True, True, True], 
+    'feature_dim': [max_doc_length, max_doc_length, max_doc_length, vocab_size, vocab_size, dim_term_topic, dim_tuple_2],
+    
+    # Pass the Adjacency matrix ONLY to the 7th feature branch
+    'adjacency_matrix': [None, None, None, None, None, None, A_matrix] 
 }
 
 # convert features setting into form of a dataframe
