@@ -430,8 +430,17 @@ class CustomFeatureSelection:
                     A = setting['adjacency_matrix']
                     
                     # Reshape the flat tuple array (batch, N) into node features (batch, N, 1)
-                    graph_x = tf.keras.layers.Reshape((feature_dim, 1))(passing_layer)
+                    freq_x = tf.keras.layers.Reshape((feature_dim, 1))(passing_layer)
                     
+                    # 2. Inject Semantic Meaning: Create Trainable Embeddings for the Tuple Nodes
+                    # This gives each of the tuples a unique 128-dimensional vector
+                    node_indices = tf.range(start=0, limit=feature_dim, delta=1)
+                    node_embeddings = Embedding(input_dim=feature_dim, output_dim=128)(node_indices)
+
+                    # 3. Combine Frequency with Semantics via Broadcasting: shape (batch, N, 128)
+                    # If a tuple doesn't appear in the document (freq=0), its semantic vector becomes 0.
+                    graph_x = freq_x * node_embeddings
+
                     # Pass through 2 layers of Message Passing
                     graph_x = GraphConvolution(ff_dim, A)(graph_x)
                     graph_x = Dropout(0.3)(graph_x)
