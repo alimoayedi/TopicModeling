@@ -626,7 +626,7 @@ class CustomFeatureSelection:
 
             return selected_features, best_score
         
-        def randomized_selection(self, features_settings, dense_settings, num_iterations=20, evaluation = 'accuracy', epochs=5, batch_size=32):
+        def randomized_selection(self, features_settings, dense_settings, lda_settings = None, num_iterations=20, evaluation = 'accuracy', epochs=5, batch_size=32):
             if not isinstance(self.global_instances.train_df,  pd.DataFrame):
                 raise ValueError("train type must be a pandas dataframe")
             
@@ -638,6 +638,9 @@ class CustomFeatureSelection:
             
             if not isinstance(dense_settings,  pd.DataFrame):
                 raise ValueError("settings type must be a pandas dataframe, including kernel_size, pool_size, embedding (boolean), feature_dim (dimension -> int)")
+        
+            if not (isinstance(lda_settings,  dict) or lda_settings is None):
+                raise ValueError("settings type must be a pandas dataframe, including gating(boolean), dense_size, and dropout")
 
             features_lst = self.global_instances.train_df.columns.to_list()
             waiting_features = set()
@@ -661,6 +664,7 @@ class CustomFeatureSelection:
                 self.__trainModel(current_features,
                                     features_settings.loc[current_features],
                                     dense_settings,
+                                    lda_settings,
                                     epochs,
                                     batch_size)
                 
