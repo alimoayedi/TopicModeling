@@ -17,6 +17,30 @@ import random
 
 import numpy as np
 
+class SemanticEmbeddingInjection(tf.keras.layers.Layer):
+    def __init__(self, feature_dim, embed_dim, **kwargs):
+        super(SemanticEmbeddingInjection, self).__init__(**kwargs)
+        self.feature_dim = feature_dim
+        self.embed_dim = embed_dim
+
+    def build(self, input_shape):
+        # Create a trainable semantic vector for every single tuple node
+        self.node_embeddings = self.add_weight(
+            shape=(self.feature_dim, self.embed_dim),
+            initializer='glorot_uniform',
+            trainable=True,
+            name='tuple_semantic_embeddings'
+        )
+        super(SemanticEmbeddingInjection, self).build(input_shape)
+
+    def call(self, inputs):
+        # inputs shape: (batch_size, feature_dim, 1)
+        # Multiply node frequencies by their semantic vectors natively
+        return inputs * self.node_embeddings
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], self.feature_dim, self.embed_dim)
+
 class GraphConvolution(tf.keras.layers.Layer):
     def __init__(self, units, adjacency_matrix, **kwargs):
         super(GraphConvolution, self).__init__(**kwargs)
@@ -36,14 +60,18 @@ class GraphConvolution(tf.keras.layers.Layer):
                                  initializer='glorot_uniform', trainable=True)
         self.b = self.add_weight(shape=(self.units,),
                                  initializer='zeros', trainable=True)
+        super(GraphConvolution, self).build(input_shape)
 
     def call(self, inputs):
         # inputs shape: (batch_size, num_nodes, feature_dim)
-        xw = tf.matmul(inputs, self.W) 
+        xw = tf.matmul(inputs, self.W)
+
         # Multiply graph structure by node features using Einstein summation
         out = tf.einsum('ij,bjk->bik', self.A_norm, xw)
         return tf.nn.relu(out + self.b)
-
+    
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[1], self.units)
 
 class CustomFeatureSelection:
     def __init__(self, train_df, train_labels, test_df, test_labels, num_classes):
@@ -434,19 +462,14 @@ class CustomFeatureSelection:
                     
                     # 2. Inject Semantic Meaning: Create Trainable Embeddings for the Tuple Nodes
                     # This gives each of the tuples a unique 128-dimensional vector
-                    node_indices = tf.range(start=0, limit=feature_dim, delta=1)
-                    node_embeddings = Embedding(input_dim=feature_dim, output_dim=128)(node_indices)
+                    graph_x = SemanticEmbeddingInjection(feature_dim=feature_dim, embed_dim=128)(freq_x)
 
-                    # 3. Combine Frequency with Semantics via Broadcasting: shape (batch, N, 128)
-                    # If a tuple doesn't appear in the document (freq=0), its semantic vector becomes 0.
-                    graph_x = freq_x * node_embeddings
-
-                    # Pass through 2 layers of Message Passing
+                    # 3. Pass through Message Passing
                     graph_x = GraphConvolution(ff_dim, A)(graph_x)
                     graph_x = Dropout(0.3)(graph_x)
                     graph_x = GraphConvolution(ff_dim // 2, A)(graph_x)
                     
-                    # Compress the graph nodes back into a flat vector for concatenation
+                    # 4. Extract the strongest topical signals
                     branch_output = GlobalMaxPooling1D()(graph_x)
                     layers_to_concatinate.append(branch_output)
 
