@@ -81,6 +81,71 @@ class FeatureGenerator():
         theta_test = lda_model.transform(test_bow)      # shape (n_val, num_topics)
         # Note: transform returns distributions (rows sum to 1).
         return lda_model, theta_train, theta_val, theta_test
+    
+    def _build_weighted_adjacency_matrix(self, tuple_list, train_doc_tuples):
+        """
+        Builds a PMI-weighted Global Adjacency Matrix for tuple_2 features.
+        Nodes are tuples. Edges exist if they share a word.
+        Weight is determined by Corpus-Level Co-occurrence (PMI).
+        """
+        num_nodes = len(tuple_list)
+        
+        # 1. Calculate Document Frequencies for Tuples and Pairs
+        total_docs = len(train_doc_tuples)
+        tuple_doc_counts = defaultdict(int)
+        pair_doc_counts = defaultdict(int)
+        
+        for doc in train_doc_tuples:
+            unique_tuples = set(doc)
+            # Count individual tuple occurrences
+            for t in unique_tuples:
+                tuple_doc_counts[t] += 1
+            
+            # Count tuple pair co-occurrences in the same document
+            unique_list = list(unique_tuples)
+            for i in range(len(unique_list)):
+                for j in range(i + 1, len(unique_list)):
+                    t1, t2 = unique_list[i], unique_list[j]
+                    pair = tuple(sorted([t1, t2])) # Sorted to keep graph undirected
+                    pair_doc_counts[pair] += 1
+
+        # 2. Build the Weighted Adjacency Matrix
+        adjacency_matrix = np.zeros((num_nodes, num_nodes), dtype=np.float32)
+        
+        for i in range(num_nodes):
+            for j in range(i + 1, num_nodes):
+                t1, t2 = tuple_list[i], tuple_list[j]
+                
+                # Structural Condition: Do they share a word? (e.g., "interest rate" & "rate cut")
+                words_t1 = set(t1.split())
+                words_t2 = set(t2.split())
+                
+                if not words_t1.isdisjoint(words_t2): 
+                    pair = tuple(sorted([t1, t2]))
+                    co_occur_count = pair_doc_counts.get(pair, 0)
+                    
+                    if co_occur_count > 0:
+                        # Pointwise Mutual Information (PMI) Calculation
+                        p_t1 = tuple_doc_counts[t1] / total_docs
+                        p_t2 = tuple_doc_counts[t2] / total_docs
+                        p_pair = co_occur_count / total_docs
+                        
+                        pmi = np.log(p_pair / (p_t1 * p_t2))
+                        
+                        # Positive PMI (PPMI): Drop negative relations to reduce noise
+                        weight = max(pmi, 0.0) 
+                    else:
+                        # Small fallback weight if they share a word but never co-occur in the same doc
+                        weight = 0.01 
+                        
+                    adjacency_matrix[i, j] = weight
+                    adjacency_matrix[j, i] = weight
+                    
+        # 3. Add Self-Loops (Identity Matrix)
+        np.fill_diagonal(adjacency_matrix, 1.0)
+        
+        self.global_adjacency_matrix = adjacency_matrix
+        return adjacency_matrix
 
     def generateFeatures(self):
         # TODO trimmed documents are in form of list. We need to join the tokens and form the texts again.
@@ -198,25 +263,69 @@ class FeatureGenerator():
         self.selected_tuple_count = len(selected_tuples_lst)
 
 ### NEW CODE STARTS HERE ###
-
-        print("Constructing Graph Adjacency Matrix for tuples...")
-
-        # Initialize an empty matrix of size (N_tuples, N_tuples)
-        A = np.zeros((self.selected_tuple_count, self.selected_tuple_count), dtype=np.float32)
+        print("Constructing PMI-Weighted Graph Adjacency Matrix for tuples...")
         
-        # Pre-split the tuples into sets of words for faster comparison
+        # 1. Mathematically calculate Co-occurrences across the corpus
+        # Convert the counts to 1s and 0s (presence/absence in a document)
+        doc_presence = (train_doc_tuple_df[selected_tuples_lst] > 0).astype(int)
+        total_docs = len(doc_presence)
+        
+        # Sum down the columns to find out how many documents contain each tuple
+        tuple_doc_counts = doc_presence.sum(axis=0).values 
+        
+        # Fast matrix multiplication to find how many times Pair A and Pair B appear in the same document
+        # Transpose (Tuples x Docs) multiplied by (Docs x Tuples) = (Tuples x Tuples)
+        co_occurrence_matrix = doc_presence.T.dot(doc_presence).values 
+
+        # 2. Build the Weighted Adjacency Matrix
+        A = np.zeros((self.selected_tuple_count, self.selected_tuple_count), dtype=np.float32)
         tuple_word_sets = [set(t) for t in selected_tuples_lst]
         
-        # Connect tuples (edges) if they share a common word
         for i in range(self.selected_tuple_count):
             for j in range(i + 1, self.selected_tuple_count):
+                
+                # Structural Condition: Do the two tuples share a word?
                 if not tuple_word_sets[i].isdisjoint(tuple_word_sets[j]):
-                    A[i, j] = 1.0
-                    A[j, i] = 1.0 # The graph is undirected
                     
-        self.global_adjacency_matrix = A
+                    # Fetch how many times they appeared together
+                    co_occur_count = co_occurrence_matrix[i, j]
+                    
+                    if co_occur_count > 0:
+                        # Pointwise Mutual Information (PMI) Calculation
+                        p_t1 = tuple_doc_counts[i] / total_docs
+                        p_t2 = tuple_doc_counts[j] / total_docs
+                        p_pair = co_occur_count / total_docs
+                        
+                        pmi = np.log(p_pair / (p_t1 * p_t2))
+                        
+                        # Positive PMI (PPMI): Drop negative relations to remove noise
+                        weight = max(pmi, 0.0)
+                    else:
+                        # Fallback small weight if they share a word but never appear in the same document
+                        weight = 0.01 
+                        
+                    A[i, j] = weight
+                    A[j, i] = weight
+                    
+        # Add Self-Loops (Identity Matrix) so a node passes information to itself
+        np.fill_diagonal(A, 1.0)
+        
+        # 3. Normalize the Weighted Laplacian
+        print("Normalizing the Graph Matrix for GCN...")
+        
+        # Calculate the Degree Matrix (sum of weights connected to each node)
+        rowsum = A.sum(axis=1)
+        
+        # Calculate D^(-0.5)
+        d_inv_sqrt = np.power(rowsum, -0.5)
+        d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.0 # Handle division by zero
+        D_inv_sqrt = np.diag(d_inv_sqrt)
+        
+        # Symmetric Normalization: D^(-0.5) * A * D^(-0.5)
+        A_normalized = D_inv_sqrt.dot(A).dot(D_inv_sqrt)
+
+        self.global_adjacency_matrix = A_normalized
         print("Graph Construction Complete.")
-        # --- END NEW CODE ---
 
 ### NEW CODE ENDS HERE ###
 
