@@ -4,6 +4,7 @@ sys.path.insert(1, '/Users/Ali/Documents')
 from TextVectorizationModel import TextVectorizationModel
 from TokenPairVectorizer import TokenPairVectorizer
 from TupleFeatureReduction import TupleFeatureReduction
+from TupleFeatureReductionMutual import TupleFeatureReductionMutual
 import CustomFuncLib as cus
 import pandas as pd
 import numpy as np
@@ -186,14 +187,18 @@ class FeatureGenerator():
         test_doc_tuple_df = pair_vectorizer.transform(self.testDocs['vectorized'])
 
 
-        svc = LinearSVR(max_iter=5000)
-        # xgb_model = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
+        # svc = LinearSVR(max_iter=5000)
+        # # xgb_model = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
 
-        train_single_label_df = self.trainTopics.apply(lambda lst: lst[0])
+        # train_single_label_df = self.trainTopics.apply(lambda lst: lst[0])
 
-        tuple_selector = TupleFeatureReduction(estimator=svc, num_features_to_select=0.1, num_steps=100)
-        # Train (fit) on the training data
-        _ , selected_tuples_lst = tuple_selector.fit(train_doc_tuple_df, train_single_label_df)
+        # tuple_selector = TupleFeatureReduction(estimator=svc, num_features_to_select=0.1, num_steps=100)
+        # # Train (fit) on the training data
+        # _ , selected_tuples_lst = tuple_selector.fit(train_doc_tuple_df, train_single_label_df)
+
+        tuple_selector = TupleFeatureReductionMutual(num_features_to_select=0.1)
+        tuple_selector.fit_transform(train_doc_tuple_df, self.trainTopics)
+        selected_tuples_lst = tuple_selector.get_selected_features()
 
         self.selected_tuple_count = len(selected_tuples_lst)
 
