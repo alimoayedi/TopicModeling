@@ -196,9 +196,15 @@ class FeatureGenerator():
         # # Train (fit) on the training data
         # _ , selected_tuples_lst = tuple_selector.fit(train_doc_tuple_df, train_single_label_df)
 
-        tuple_selector = TupleFeatureReductionMutual(num_features_to_select=0.1)
-        tuple_selector.fit_transform(train_doc_tuple_df, self.trainTopics)
-        selected_tuples_lst = tuple_selector.get_selected_features()
+        # Prepare 1D labels for scikit-learn's mutual_info_classif (just like you did for SVR)
+        train_single_label_df = self.trainTopics.apply(lambda lst: lst[0])
+
+        # The vocabulary is simply the column names of your tuple dataframe
+        tuple_vocabulary_list = list(train_doc_tuple_df.columns)
+
+        tuple_selector = TupleFeatureReductionMutual(keep_fraction=0.1)
+        tuple_selector.fit_transform(train_doc_tuple_df, train_single_label_df, tuple_vocabulary_list)
+        selected_tuples_lst = tuple_selector.get_selected_vocabulary()
 
         self.selected_tuple_count = len(selected_tuples_lst)
 

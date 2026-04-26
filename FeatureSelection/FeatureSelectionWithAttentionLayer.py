@@ -466,8 +466,8 @@ class CustomFeatureSelection:
 
                     # 3. Pass through Message Passing
                     graph_x = GraphConvolution(ff_dim, A)(graph_x)
-                    graph_x = Dropout(0.3)(graph_x)
-                    graph_x = GraphConvolution(ff_dim // 2, A)(graph_x)
+                    # graph_x = Dropout(0.3)(graph_x)
+                    # graph_x = GraphConvolution(ff_dim // 2, A)(graph_x)
                     
                     # 4. Extract the strongest topical signals
                     branch_output = GlobalMaxPooling1D()(graph_x)
