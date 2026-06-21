@@ -3,7 +3,7 @@ from sentence_transformers import SentenceTransformer
 class SequenceEmbeddingsFeature:
 
     def __init__(self, model_name='all-MiniLM-L6-v2'):
-        self.model_name = 'all-MiniLM-L6-v2'
+        self.model_name = model_name
 
     def generate_contextual_embeddings(self, df, text_column='text'):
         """

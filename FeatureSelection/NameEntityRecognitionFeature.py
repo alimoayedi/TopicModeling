@@ -7,10 +7,10 @@ class NameEntityRecognitionFeature:
     It scans the text to find the density of specific Named Entities and returns a entity-count Dimensional 
     vector for each document.
     """
-    def __init__(self):
-        pass
+    def __init__(self, language_model='en_core_web_sm'):
+        self.language_model = language_model
 
-    def generate_ner_density(self, df, text_column, language_model='en_core_web_sm', track_labels=None, top_k=6,):
+    def generate_ner_density(self, df, text_column, track_labels=None, top_k=6,):
         """
         Scans raw text to find the density of Named Entities.
         If track_labels is None, it dynamically profiles the corpus to find the top_k most frequent labels.
@@ -19,7 +19,7 @@ class NameEntityRecognitionFeature:
             track_labels: The list of labels used (so they can be reused on test data).
         """
         # Load the selected language model dynamically
-        nlp = spacy.load(language_model, disable=["parser", "lemmatizer"])
+        nlp = spacy.load(self.language_model, disable=["parser", "lemmatizer"])
         
         # --- DYNAMIC PROFILING STAGE ---
         if track_labels is None:
