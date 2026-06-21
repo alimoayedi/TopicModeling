@@ -5,6 +5,7 @@ from TextVectorizationModel import TextVectorizationModel
 from TokenPairVectorizer import TokenPairVectorizer
 from TupleFeatureReduction import TupleFeatureReduction
 from TupleFeatureReductionMutual import TupleFeatureReductionMutual
+from NameEntityRecognition import NameEntityRecognition
 import CustomFuncLib as cus
 import pandas as pd
 import numpy as np
@@ -208,7 +209,26 @@ class FeatureGenerator():
 
         self.selected_tuple_count = len(selected_tuples_lst)
 
-### NEW CODE STARTS HERE ###
+        # Named Entity Density
+        ner = NameEntityRecognition()
+        raw_text_col = 'doc'
+
+        # It will automatically find the top 6 labels based on the training corpus context
+        train_ner_vectors, dynamic_labels = ner.generate_ner_density(self.trainDocs, text_column=raw_text_col, track_labels=None, top_k=6)
+        self.trainDocs.loc[:, 'ner_density'] = train_ner_vectors
+
+        val_ner_vectors, _ = ner.generate_ner_density(self.valDocs, text_column=raw_text_col, track_labels=dynamic_labels)
+        self.valDocs.loc[:, 'ner_density'] = val_ner_vectors
+
+        test_ner_vectors, _ = ner.generate_ner_density(self.testDocs, text_column=raw_text_col, track_labels=dynamic_labels)
+        self.testDocs.loc[:, 'ner_density'] = test_ner_vectors
+
+        # Contextual Sequence Embeddings (BERT)
+        self.trainDocs.loc[:, 'contextual_embedd'] = self.__generate_contextual_embeddings(self.trainDocs, text_column=raw_text_col)
+        self.valDocs.loc[:, 'contextual_embedd'] = self.__generate_contextual_embeddings(self.valDocs, text_column=raw_text_col)
+        self.testDocs.loc[:, 'contextual_embedd'] = self.__generate_contextual_embeddings(self.testDocs, text_column=raw_text_col)
+
+        ### NEW CODE STARTS HERE ###
         print("Constructing PMI-Weighted Graph Adjacency Matrix for tuples...")
         
         # 1. Mathematically calculate Co-occurrences across the corpus

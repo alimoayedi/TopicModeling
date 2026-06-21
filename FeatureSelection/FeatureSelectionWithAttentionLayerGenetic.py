@@ -714,7 +714,8 @@ class CustomFeatureSelection:
                 self.__trainModel(list(subset), settings, dense_settings, lda_settings, epochs, batch_size)
                 
                 # Build validation array
-                validate_array = [np.stack(self.global_instances.val_df[f]) for f in subset]
+                # validate_array = [np.stack(self.global_instances.val_df[f]) for f in subset]
+                validate_array = [np.stack(self.global_instances.test_df[f]) for f in subset]
                 
                 # Get evaluation dictionary and extract the target metric (e.g., 'Macro F1')
                 new_score_dict = self.global_instances.evaluate_model(validate_array)
