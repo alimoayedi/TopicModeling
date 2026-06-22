@@ -190,6 +190,29 @@ class CustomFeatureSelection:
                     layers_to_concatinate.append(x_lda)  # shape (None, lda_proj_dim)
                     continue
 
+                # ==========================================================
+                # NEW ROUTE: Bypass sequence architecture for Dense features
+                # ==========================================================
+                if feature in ['ner_density', 'contextual_embedd']:
+
+                    setting = settings.loc[feature]
+
+                    feature_dim = int(setting['feature_dim'])
+                    ff_dim = int(setting.get('ff_dim', 128))
+                    
+                    input_layer = Input(shape=(feature_dim,), name=f"input_{feature}")
+                    
+                    # Pass through a standard feed-forward block to match the depth of other features
+                    x = Dense(ff_dim, activation='relu')(input_layer)
+                    x = BatchNormalization()(x)
+                    x = Dropout(0.3)(x)
+                    
+                    layers_to_concatinate.append(x)
+                    inputs.append(input_layer)
+                    
+                    continue # Skip the rest of the loop for this feature
+                # ==========================================================
+
                 # gets the settings of each feature
                 setting = settings.loc[feature]
 
