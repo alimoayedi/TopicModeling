@@ -42,10 +42,13 @@ class FeatureGenerator():
 
         for index, topics_lst in topics_df.items():
             term_vector = vectorized_df.loc[index]
+            if isinstance(topics_lst, (int, float, np.integer, np.floating)):
+                topics_lst = [int(topics_lst)]
+
+            unique_topics = list(set(topics_lst)) # Extract unique topics OUTSIDE the term loop for speed
             for term in term_vector:
-                topics_lst = list(set(topics_lst))
-                token_topic_df.loc[term, topics_lst] += 1  # Update all relevant topics for the term
-        
+                token_topic_df.loc[term, unique_topics] += 1   # Update all relevant topics for the term
+                
 
         if not multi_label:
             # Filter terms for each topic
