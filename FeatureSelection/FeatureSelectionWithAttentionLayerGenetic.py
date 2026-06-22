@@ -261,12 +261,12 @@ class CustomFeatureSelection:
 
                 if model_type == 'transformer':
                     # A. Transformer Branch (For Sequential Data)
-                    num_blocks = setting.get('num_transformer_blocks', 1)
-                    num_heads = setting.get('num_heads', 2)
+                    num_blocks = int(setting.get('num_transformer_blocks', 1))
+                    num_heads = int(setting.get('num_heads', 2))
                     
                     # Safe fallback for key_dim if embedded_output_dim is not set
                     embed_dim = self.global_instances.embedded_output_dim if hasattr(self.global_instances, 'embedded_output_dim') else 64
-                    key_dim = setting.get('key_dim', embed_dim // num_heads)
+                    key_dim = int(setting.get('key_dim', embed_dim // num_heads))
                 
                     for _ in range(num_blocks):
                         attention_output = MultiHeadAttention(num_heads=num_heads, key_dim=key_dim)(passing_layer, passing_layer)
