@@ -5,7 +5,7 @@ from TextVectorizationModel import TextVectorizationModel
 from TokenPairVectorizer import TokenPairVectorizer
 from TupleFeatureReduction import TupleFeatureReduction
 from TupleFeatureReductionMutual import TupleFeatureReductionMutual
-from NameEntityRecognition import NameEntityRecognition
+from NameEntityRecognitionFeature import NameEntityRecognitionFeature
 from SequenceEmbeddingsFeature import SequenceEmbeddingsFeature
 import CustomFuncLib as cus
 import pandas as pd
@@ -48,7 +48,7 @@ class FeatureGenerator():
             unique_topics = list(set(topics_lst)) # Extract unique topics OUTSIDE the term loop for speed
             for term in term_vector:
                 token_topic_df.loc[term, unique_topics] += 1   # Update all relevant topics for the term
-                
+
 
         if not multi_label:
             # Filter terms for each topic
@@ -214,7 +214,7 @@ class FeatureGenerator():
         self.selected_tuple_count = len(selected_tuples_lst)
 
         # Named Entity Density
-        ner = NameEntityRecognition(language_model = 'en_core_web_sm')
+        ner = NameEntityRecognitionFeature(language_model = 'en_core_web_sm')
         raw_text_col = 'doc'
 
         # It will automatically find the top 6 labels based on the training corpus context
