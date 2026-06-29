@@ -324,6 +324,7 @@ class CustomFeatureSelection:
 
 # end of update
             if lda_gating and lda_tensor is not None:
+                print("\n--- LDA Gating Activated ---")
                 # apply lda gating directly using the ALREADY REGISTERED lda_tensor
                 gate_hidden = Dense(max(16, self.global_instances.num_classes), activation='relu', name="gate_hidden")(lda_tensor)
                 gate_vector = Dense(len(layers_to_concatinate), activation='sigmoid', name="branch_gate")(gate_hidden)

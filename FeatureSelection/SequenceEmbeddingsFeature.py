@@ -1,9 +1,14 @@
 from sentence_transformers import SentenceTransformer
+import torch
 
 class SequenceEmbeddingsFeature:
-
     def __init__(self, model_name='all-MiniLM-L6-v2'):
-        self.model_name = model_name
+        # 1. Dynamically check if CUDA (GPU) is available
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        print(f"Initializing SequenceEmbeddingsFeature. Device selected: {self.device}")
+        
+        # 2. Pass the device argument to the SentenceTransformer
+        self.model = SentenceTransformer(model_name, device=self.device)
 
     def generate_contextual_embeddings(self, df, text_column='text'):
         """

@@ -10,12 +10,15 @@ from SequenceEmbeddingsFeature import SequenceEmbeddingsFeature
 import CustomFuncLib as cus
 import pandas as pd
 import numpy as np
+from tqdm.auto import tqdm
 
 from sklearn.svm import LinearSVR
 from sklearn.decomposition import LatentDirichletAllocation
 
 from xgboost import XGBClassifier
 
+# Initialize tqdm for pandas
+tqdm.pandas(desc="Processing Rows")
 
 class FeatureGenerator():
     def __init__(self, max_doc_length, num_topics, apply_cosine_similarity_reduction=False):
@@ -91,7 +94,8 @@ class FeatureGenerator():
     def generateFeatures(self):
         # TODO trimmed documents are in form of list. We need to join the tokens and form the texts again.
 
-        # Vectorization of the train documents 
+        # Vectorization of the train documents
+        print("Vectorizing documents...") 
         vectorization_model = TextVectorizationModel(apply_cosine_similarity_reduction=False)
         self.trainDocs['vectorized'] = vectorization_model.fit(self.trainDocs['trimmed'])
         self.valDocs['vectorized'] = vectorization_model.transform(self.valDocs['trimmed'])
@@ -100,6 +104,7 @@ class FeatureGenerator():
         self.vocab_size = vectorization_model.get_vocab_size()
 
         # pad vectorized documents
+        print("Padding vectors...")
         self.trainDocs.loc[:,'vectorized_padded'] = self.trainDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
         self.valDocs.loc[:, 'vectorized_padded'] = self.valDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
         self.testDocs.loc[:, 'vectorized_padded'] = self.testDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
@@ -130,6 +135,7 @@ class FeatureGenerator():
         test_tfidf = pd.DataFrame(test_tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.testDocs.index)
         self.testDocs['tfidf'] = pd.DataFrame(test_tfidf.apply(cus.create_list, axis=1))
 
+        print("Fitting LDA Model...")
         lda_model, lda_theta_train, lda_theta_val, lda_theta_tost = self.__fit_lda(self.trainDocs['tf'].to_list(),
                                                                                    self.valDocs['tf'].to_list(),
                                                                                    self.testDocs['tf'].to_list(),
@@ -214,6 +220,7 @@ class FeatureGenerator():
         self.selected_tuple_count = len(selected_tuples_lst)
 
         # Named Entity Density
+        print("Generating NER Density...")
         ner = NameEntityRecognitionFeature(language_model = 'en_core_web_sm')
         raw_text_col = 'doc'
 
@@ -228,6 +235,7 @@ class FeatureGenerator():
         self.testDocs.loc[:, 'ner_density'] = test_ner_vectors
 
         # Contextual Sequence Embeddings (BERT)
+        print("Generating Contextual Embeddings...")
         seq_embedd = SequenceEmbeddingsFeature(model_name='all-MiniLM-L6-v2')
         self.trainDocs.loc[:, 'contextual_embedd'] = seq_embedd.generate_contextual_embeddings(self.trainDocs, text_column=raw_text_col)
         self.valDocs.loc[:, 'contextual_embedd'] = seq_embedd.generate_contextual_embeddings(self.valDocs, text_column=raw_text_col)
@@ -298,7 +306,7 @@ class FeatureGenerator():
         self.global_adjacency_matrix = A_normalized
         print("Graph Construction Complete.")
 
-### NEW CODE ENDS HERE ###
+        ### NEW CODE ENDS HERE ###
 
         self.trainDocs.loc[:, 'tuple_2'] = train_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
         self.valDocs.loc[:, 'tuple_2'] = val_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
