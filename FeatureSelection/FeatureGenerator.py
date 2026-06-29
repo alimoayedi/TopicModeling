@@ -31,10 +31,10 @@ class FeatureGenerator():
         self.global_adjacency_matrix = None
     
     def setDataset(self, train, trainTopics, validation, test):
-        self.trainDocs = train
-        self.trainTopics = trainTopics
-        self.valDocs = validation
-        self.testDocs = test
+        self.trainDocs = train.copy()
+        self.trainTopics = trainTopics.copy()
+        self.valDocs = validation.copy()
+        self.testDocs = test.copy()
 
     def __get_term_topic_df(self, vectorized_df, topics_df, terms_lst, multi_label=False):
         # generate the Term-Topic Dictionary

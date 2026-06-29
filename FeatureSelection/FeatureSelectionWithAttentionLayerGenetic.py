@@ -182,12 +182,20 @@ class CustomFeatureSelection:
             if lda_settings is not None:
                 lda_gating = lda_settings.get("lda_gating")
 
+            # ==========================================================
+            # Variable to hold the LDA tensor if the GA selects it
+            # ==========================================================
+            lda_tensor = None
+
             # loops over features
             for feature in features:
-                if feature == 'lda':
+                if feature == 'lda' or feature == 'term_topic_weight':
                     lda_input, x_lda = self.global_instances.get_lda(lda_settings.get("lda_dense"), lda_settings.get("lda_dropout"))
                     inputs.append(lda_input)
                     layers_to_concatinate.append(x_lda)  # shape (None, lda_proj_dim)
+                    
+                    # UPDATE 2: Save the tensor so the gate can use it without creating a duplicate, disconnected input
+                    lda_tensor = x_lda
                     continue
 
                 # ==========================================================
@@ -244,10 +252,10 @@ class CustomFeatureSelection:
                 else:
                     if model_type == 'transformer':
                         # Sequences need a 3D shape (batch, steps, features) for Attention
-                        input_layer = Input(shape=(feature_dim, 1))
+                        input_layer = Input(shape=(feature_dim, 1), name=f"input_{feature}")
                     else:
                         # Bag of Words strictly needs a 2D shape (batch, vocab_size)
-                        input_layer = Input(shape=(feature_dim,))
+                        input_layer = Input(shape=(feature_dim,), name=f"input_{feature}")
                     
                     passing_layer = input_layer
 
@@ -304,19 +312,20 @@ class CustomFeatureSelection:
                     graph_x = SemanticEmbeddingInjection(feature_dim=feature_dim, embed_dim=128)(freq_x)
 
                     # 3. Pass through Message Passing
-                    graph_x = GraphConvolution(ff_dim, A)(graph_x)
-                    # graph_x = Dropout(0.3)(graph_x)
-                    # graph_x = GraphConvolution(ff_dim // 2, A)(graph_x)
+                    num_gcn_layers = int(setting.get('num_gcn_layers', 2))
+                    
+                    for _ in range(num_gcn_layers):
+                        graph_x = GraphConvolution(ff_dim, A)(graph_x)
+                        graph_x = Dropout(0.3)(graph_x)
                     
                     # 4. Extract the strongest topical signals
                     branch_output = GlobalMaxPooling1D()(graph_x)
                     layers_to_concatinate.append(branch_output)
 
 # end of update
-            if lda_gating:
-                # apply lda gating
-                _, x_lda = self.global_instances.get_lda(lda_settings.get("lda_dense"), lda_settings.get("lda_dropout"))
-                gate_hidden = Dense(max(16, self.global_instances.num_classes), activation='relu', name="gate_hidden")(x_lda)
+            if lda_gating and lda_tensor is not None:
+                # apply lda gating directly using the ALREADY REGISTERED lda_tensor
+                gate_hidden = Dense(max(16, self.global_instances.num_classes), activation='relu', name="gate_hidden")(lda_tensor)
                 gate_vector = Dense(len(layers_to_concatinate), activation='sigmoid', name="branch_gate")(gate_hidden)
 
                 gated_layers_to_concatinate = []
@@ -351,7 +360,6 @@ class CustomFeatureSelection:
             
             # self.global_instances.model.summary()
             
-        
         def forward_selection(self, features_settings, dense_settings, lda_settings = None, evaluation = 'accuracy', epochs=5, batch_size=32):
             if not isinstance(self.global_instances.train_df,  pd.DataFrame):
                 raise ValueError("train type must be a pandas dataframe")
@@ -661,4 +669,6 @@ class CustomFeatureSelection:
 
             self.global_instances.model.fit(train_array, self.global_instances.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
                     
+
+
 

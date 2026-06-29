@@ -17,7 +17,8 @@ class TextVectorizationModel:
                                                 stop_words=None, 
                                                 max_df=1.0, 
                                                 min_df=1, 
-                                                max_features=None)
+                                                max_features=None, 
+                                                token_pattern=None)
         self.vocab_size = 0
         self.cosine_sim_score = None
         self.tf_matrix = None

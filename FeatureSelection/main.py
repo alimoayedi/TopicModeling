@@ -180,7 +180,7 @@ train_labels_array = np.array(trainTopics['one_hot'].tolist())
 validation_labels_array = np.array(valTopcis['one_hot'].tolist())
 
 # number of unique terms in the whole database
-vocab_size = cus.get_number_of_tokens(trainDocs['vectorized_padded'])
+vocab_size = vocab_size = vectorizedModel.vocab_size
 
 # settings that are used for training the NN model.
 # more layers for each feature can be added, however, the number of
