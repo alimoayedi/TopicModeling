@@ -156,9 +156,11 @@ class CustomFeatureSelection:
         results_df = pd.DataFrame(self.results)
         print(results_df.to_string(index=False))  # Print the DataFrame as a table
 
-    def get_lda(self, dense, dropout):
+    def get_lda(self, dense, dropout, feature_dim):
 
-        lda_input = Input(shape=(self.num_classes,), name='lda_input')
+        # Use feature_dim so Keras expects the correct array size (e.g., 2560 instead of 10)
+        lda_input = Input(shape=(feature_dim,), name='lda_input')
+        
         x_lda = BatchNormalization(name="lda_batch_input")(lda_input)
         x_lda = Dense(dense, activation='relu', name="lda_proj")(x_lda)
         x_lda = Dropout(dropout, name="lda_dropout")(x_lda)
@@ -190,7 +192,13 @@ class CustomFeatureSelection:
             # loops over features
             for feature in features:
                 if feature == 'lda' or feature == 'term_topic_weight':
-                    lda_input, x_lda = self.global_instances.get_lda(lda_settings.get("lda_dense"), lda_settings.get("lda_dropout"))
+                    lda_dim = int(settings.loc[feature]['feature_dim'])
+
+                    lda_input, x_lda = self.global_instances.get_lda(
+                        lda_settings.get("lda_dense"), 
+                        lda_settings.get("lda_dropout"), 
+                        lda_dim
+                    )
                     inputs.append(lda_input)
                     layers_to_concatinate.append(x_lda)  # shape (None, lda_proj_dim)
                     
