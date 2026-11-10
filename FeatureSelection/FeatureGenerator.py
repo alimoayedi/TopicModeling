@@ -32,6 +32,7 @@ class FeatureGenerator():
         self.vocab_size = None
         self.selected_tuple_count = None
         self.global_adjacency_matrix = None
+        self.raw_text_col = None
     
     def setDataset(self, train, trainTopics, validation, test):
         self.trainDocs = train.copy()
@@ -39,19 +40,24 @@ class FeatureGenerator():
         self.valDocs = validation.copy()
         self.testDocs = test.copy()
 
+    def setNERColumn(self, ner_column):
+        self.raw_text_col = ner_column
+
     def __get_term_topic_df(self, vectorized_df, topics_df, terms_lst, multi_label=False):
         # generate the Term-Topic Dictionary
-        token_topic_df = pd.DataFrame(0, index=range(terms_lst), columns=range(self.num_topics), dtype=int)
+        token_topic_matrix = np.zeros((terms_lst, self.num_topics), dtype=int)
 
         for index, topics_lst in topics_df.items():
             term_vector = vectorized_df.loc[index]
             if isinstance(topics_lst, (int, float, np.integer, np.floating)):
-                topics_lst = [int(topics_lst)]
+                unique_topics = [int(topics_lst)]
+            else:
+                unique_topics = list(set(topics_lst))
 
-            unique_topics = list(set(topics_lst)) # Extract unique topics OUTSIDE the term loop for speed
-            for term in term_vector:
-                token_topic_df.loc[term, unique_topics] += 1   # Update all relevant topics for the term
+            for t in unique_topics:
+                np.add.at(token_topic_matrix[:, t], term_vector, 1)
 
+        token_topic_df = pd.DataFrame(token_topic_matrix, index=range(terms_lst), columns=range(self.num_topics))
 
         if not multi_label:
             # Filter terms for each topic
@@ -69,14 +75,44 @@ class FeatureGenerator():
         return token_topic_df
 
     def __get_term_topic_weights(self, vectorized_df, token_topic_df):
+        token_topic_matrix = token_topic_df.values
+        result = {}
+        for topic in range(self.num_topics):
+            topic_weights = token_topic_matrix[:, topic]
+            result[topic] = [list(topic_weights[lst]) for lst in vectorized_df]
         
-        # train term-topic weights
-        token_topic_weight = pd.DataFrame(None, columns=range(self.num_topics), index=vectorized_df.index)
-
-        for topic in list(token_topic_df.columns):
-            token_topic_weight[topic] = vectorized_df.apply(lambda lst: [token_topic_df.loc[term][topic] for term in lst])
+        return pd.DataFrame(result, index=vectorized_df.index)
+    
+    def __get_weights_for_docs(self, token_topic_matrix, vectorized_docs, max_len):
+        term_topic_weights = []
+        num_topics = token_topic_matrix.shape[1]
         
-        return token_topic_weight
+        for lst in vectorized_docs:
+            valid_terms = [term for term in lst if term < token_topic_matrix.shape[0]]
+            
+            # 1. Truncate if the document exceeds the maximum length
+            valid_terms = valid_terms[:max_len]
+            
+            if not valid_terms:
+                # If empty, return a flattened list of zeros of the exact required size
+                term_topic_weights.append(np.zeros(num_topics * max_len).tolist())
+                continue
+                
+            # 2. Fetch the weights using fast NumPy indexing. 
+            # Shape will be (len(valid_terms), num_topics)
+            weights = token_topic_matrix[valid_terms, :] 
+            
+            # 3. Pad the sequence dimension to ensure uniform shape (max_len, num_topics)
+            pad_amount = max_len - len(valid_terms)
+            if pad_amount > 0:
+                weights = np.pad(weights, ((0, pad_amount), (0, 0)), mode='constant', constant_values=0)
+                
+            # 4. Transpose and flatten: shape becomes a 1D array of length (num_topics * max_len)
+            # This perfectly mimics the structural output of your older `cus.concatenate_arrays` logic
+            flat_weights = weights.T.flatten().tolist()
+            term_topic_weights.append(flat_weights)
+            
+        return term_topic_weights
     
     def __fit_lda(self, train_bow, val_bow, test_bow, num_topics):
         """
@@ -90,6 +126,15 @@ class FeatureGenerator():
         theta_test = lda_model.transform(test_bow)      # shape (n_val, num_topics)
         # Note: transform returns distributions (rows sum to 1).
         return lda_model, theta_train, theta_val, theta_test
+    
+    def generate_summary_features(self, df):
+        """
+        Processes the 'summary' column to generate new feature arrays.
+        """
+        # Example: Generate contextual embeddings specifically for the summary
+        summary_embeddings = self._generate_contextual_embeddings(df['summary'].tolist())
+        df['summary_embedd'] = list(summary_embeddings)
+        return df
 
     def generateFeatures(self):
         # TODO trimmed documents are in form of list. We need to join the tokens and form the texts again.
@@ -104,36 +149,36 @@ class FeatureGenerator():
         self.vocab_size = vectorization_model.get_vocab_size()
 
         # pad vectorized documents
+        # Leave sequences unpadded for the DynamicBatchGenerator
+        print("Passing unpadded vectors for dynamic batching...")
+        # pad vectorized documents
         print("Padding vectors...")
         self.trainDocs.loc[:,'vectorized_padded'] = self.trainDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
         self.valDocs.loc[:, 'vectorized_padded'] = self.valDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
         self.testDocs.loc[:, 'vectorized_padded'] = self.testDocs['vectorized'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
         # calculation of the tf score for train, validation and test data
-        train_tf = pd.DataFrame(vectorization_model.tf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.trainDocs.index)
-        self.trainDocs['tf'] = pd.DataFrame(train_tf.apply(cus.create_list, axis=1))
+        self.trainDocs['tf'] = vectorization_model.tf_matrix.toarray().tolist()
 
         val_joined_tokens = self.valDocs['trimmed'].apply(lambda txt: " ".join(txt))
         val_tf_matrix = vectorization_model.count_vectorizer.transform(val_joined_tokens)
-        val_tf = pd.DataFrame(val_tf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.valDocs.index)
-        self.valDocs['tf'] = pd.DataFrame(val_tf.apply(cus.create_list, axis=1))
+        self.valDocs['tf'] = val_tf_matrix.toarray().tolist()
 
         test_joined_tokens = self.testDocs['trimmed'].apply(lambda txt: " ".join(txt))
         test_tf_matrix = vectorization_model.count_vectorizer.transform(test_joined_tokens)
-        test_tf = pd.DataFrame(test_tf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.testDocs.index)
-        self.testDocs['tf'] = pd.DataFrame(test_tf.apply(cus.create_list, axis=1))
+        self.testDocs['tf'] = test_tf_matrix.toarray().tolist()
 
         # calculation of tf-idf score for train, validation, and test sets
-        train_tfidf = pd.DataFrame(vectorization_model.tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.trainDocs.index)
-        self.trainDocs['tfidf'] = pd.DataFrame(train_tfidf.apply(cus.create_list, axis=1))
-
-        val_tfidf_matrix = vectorization_model.tfidf_vectorizer.transform(val_joined_tokens)
-        val_tfidf = pd.DataFrame(val_tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.valDocs.index)
-        self.valDocs['tfidf'] = pd.DataFrame(val_tfidf.apply(cus.create_list, axis=1))
+        self.trainDocs['tfidf'] = vectorization_model.tfidf_matrix.toarray().tolist()
 
         test_tfidf_matrix = vectorization_model.tfidf_vectorizer.transform(test_joined_tokens)
-        test_tfidf = pd.DataFrame(test_tfidf_matrix.toarray(), columns=range(vectorization_model.get_vocab_size()), index=self.testDocs.index)
-        self.testDocs['tfidf'] = pd.DataFrame(test_tfidf.apply(cus.create_list, axis=1))
+        self.testDocs['tfidf'] = test_tfidf_matrix.toarray().tolist()
+
+        val_tfidf_matrix = vectorization_model.tfidf_vectorizer.transform(val_joined_tokens)
+        self.valDocs['tfidf'] = val_tfidf_matrix.toarray().tolist()
+
+        test_tfidf_matrix = vectorization_model.tfidf_vectorizer.transform(test_joined_tokens)
+        self.testDocs['tfidf'] = test_tfidf_matrix.toarray().tolist()
 
         print("Fitting LDA Model...")
         lda_model, lda_theta_train, lda_theta_val, lda_theta_tost = self.__fit_lda(self.trainDocs['tf'].to_list(),
@@ -141,9 +186,9 @@ class FeatureGenerator():
                                                                                    self.testDocs['tf'].to_list(),
                                                                                    self.num_topics)
         
-        self.trainDocs['lda'] = (pd.DataFrame(lda_theta_train, index=self.trainDocs.index)).apply(cus.create_list, axis=1)
-        self.valDocs['lda'] = (pd.DataFrame(lda_theta_val, index=self.valDocs.index)).apply(cus.create_list, axis=1)
-        self.testDocs['lda'] = (pd.DataFrame(lda_theta_tost, index=self.testDocs.index)).apply(cus.create_list, axis=1)
+        self.trainDocs['lda'] = lda_theta_train.tolist()
+        self.valDocs['lda'] = lda_theta_val.tolist()
+        self.testDocs['lda'] = lda_theta_tost.tolist()
 
         # calculate POS tags of vectorized documents in train, validation and test dataset
         self.trainDocs.loc[:, 'pos_tag'] = self.trainDocs['preprocess'].apply(lambda lst: cus.pos_tagger(lst))
@@ -155,39 +200,14 @@ class FeatureGenerator():
         self.testDocs.loc[:, 'pos_padded'] = self.testDocs['pos_tag'].apply(lambda lst: cus.padding(lst, self.max_doc_length))
 
         token_topic_df = self.__get_term_topic_df(self.trainDocs['vectorized'], self.trainTopics, vectorization_model.get_vocab_size(), multi_label=False)
-        token_topic_weight_df = self.__get_term_topic_weights(self.trainDocs['vectorized'], token_topic_df)
-
-        # term-topic weight of train documents
-        for topic in list(token_topic_weight_df.columns):
-            token_topic_weight_df[topic] = token_topic_weight_df[topic].apply(lambda lst: cus.padding(lst, self.max_doc_length))
-
-        # concatinate term-topic weights
-        self.trainDocs.loc[:, 'term_topic_weight'] = token_topic_weight_df.apply(lambda lst: cus.concatenate_arrays(lst),  axis=1)
-
-
-        # term-topic weight of validation documents
-        validation_term_topic_df = pd.DataFrame(None, columns=range(self.num_topics), index=self.valDocs.index)
-
-        for topic in list(validation_term_topic_df.columns):
-            validation_term_topic_df[topic] = self.valDocs['vectorized'].apply(
-                lambda lst: [token_topic_df.loc[term][topic] if term in token_topic_df.index else 0 for term in lst]
-                )
-            validation_term_topic_df[topic] = validation_term_topic_df[topic].apply(lambda lst: cus.padding(lst, self.max_doc_length))
-
-        self.valDocs.loc[:, 'term_topic_weight'] = validation_term_topic_df.apply(lambda lst: cus.concatenate_arrays(lst),  axis=1)
-
-
-        # term-topic weight of test documents
-        test_term_topic_df = pd.DataFrame(None, columns=range(self.num_topics), index=self.testDocs.index)
-
-        for topic in list(test_term_topic_df.columns):
-            test_term_topic_df[topic] = self.testDocs['vectorized'].apply(
-                lambda lst: [token_topic_df.loc[term][topic] if term in token_topic_df.index else 0 for term in lst]
-                )
-            test_term_topic_df[topic] = test_term_topic_df[topic].apply(lambda lst: cus.padding(lst, self.max_doc_length))
-
-        self.testDocs.loc[:, 'term_topic_weight'] = test_term_topic_df.apply(lambda lst: cus.concatenate_arrays(lst),  axis=1)
-
+        
+        # Extract the raw matrix for fast NumPy indexing
+        token_topic_matrix = token_topic_df.values
+        
+        # Fast generation of heavily padded, uniformly sized arrays
+        self.trainDocs.loc[:, 'term_topic_weight'] = self.__get_weights_for_docs(token_topic_matrix, self.trainDocs['vectorized'], self.max_doc_length)
+        self.valDocs.loc[:, 'term_topic_weight'] = self.__get_weights_for_docs(token_topic_matrix, self.valDocs['vectorized'], self.max_doc_length)
+        self.testDocs.loc[:, 'term_topic_weight'] = self.__get_weights_for_docs(token_topic_matrix, self.testDocs['vectorized'], self.max_doc_length)
 
         pair_vectorizer = TokenPairVectorizer(tuple_size=2)
         # Fit the model on the training data
@@ -222,24 +242,23 @@ class FeatureGenerator():
         # Named Entity Density
         print("Generating NER Density...")
         ner = NameEntityRecognitionFeature(language_model = 'en_core_web_sm')
-        raw_text_col = 'doc'
 
         # It will automatically find the top 6 labels based on the training corpus context
-        train_ner_vectors, dynamic_labels = ner.generate_ner_density(self.trainDocs, text_column=raw_text_col, track_labels=None, top_k=6)
+        train_ner_vectors, dynamic_labels = ner.generate_ner_density(self.trainDocs, text_column=self.raw_text_col, track_labels=None, top_k=6)
         self.trainDocs.loc[:, 'ner_density'] = train_ner_vectors
 
-        val_ner_vectors, _ = ner.generate_ner_density(self.valDocs, text_column=raw_text_col, track_labels=dynamic_labels)
+        val_ner_vectors, _ = ner.generate_ner_density(self.valDocs, text_column=self.raw_text_col, track_labels=dynamic_labels)
         self.valDocs.loc[:, 'ner_density'] = val_ner_vectors
 
-        test_ner_vectors, _ = ner.generate_ner_density(self.testDocs, text_column=raw_text_col, track_labels=dynamic_labels)
+        test_ner_vectors, _ = ner.generate_ner_density(self.testDocs, text_column=self.raw_text_col, track_labels=dynamic_labels)
         self.testDocs.loc[:, 'ner_density'] = test_ner_vectors
 
         # Contextual Sequence Embeddings (BERT)
         print("Generating Contextual Embeddings...")
         seq_embedd = SequenceEmbeddingsFeature(model_name='all-MiniLM-L6-v2')
-        self.trainDocs.loc[:, 'contextual_embedd'] = seq_embedd.generate_contextual_embeddings(self.trainDocs, text_column=raw_text_col)
-        self.valDocs.loc[:, 'contextual_embedd'] = seq_embedd.generate_contextual_embeddings(self.valDocs, text_column=raw_text_col)
-        self.testDocs.loc[:, 'contextual_embedd'] = seq_embedd.generate_contextual_embeddings(self.testDocs, text_column=raw_text_col)
+        self.trainDocs.loc[:, 'contextual_embedd'] = seq_embedd.generate_contextual_embeddings(self.trainDocs, text_column=self.raw_text_col)
+        self.valDocs.loc[:, 'contextual_embedd'] = seq_embedd.generate_contextual_embeddings(self.valDocs, text_column=self.raw_text_col)
+        self.testDocs.loc[:, 'contextual_embedd'] = seq_embedd.generate_contextual_embeddings(self.testDocs, text_column=self.raw_text_col)
 
         ### NEW CODE STARTS HERE ###
         print("Constructing PMI-Weighted Graph Adjacency Matrix for tuples...")
@@ -307,9 +326,8 @@ class FeatureGenerator():
         print("Graph Construction Complete.")
 
         ### NEW CODE ENDS HERE ###
-
-        self.trainDocs.loc[:, 'tuple_2'] = train_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
-        self.valDocs.loc[:, 'tuple_2'] = val_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
-        self.testDocs.loc[:, 'tuple_2'] = test_doc_tuple_df[selected_tuples_lst].apply(cus.create_list, axis=1)
+        self.trainDocs.loc[:, 'tuple_2'] = train_doc_tuple_df[selected_tuples_lst].values.tolist()
+        self.valDocs.loc[:, 'tuple_2'] = val_doc_tuple_df[selected_tuples_lst].values.tolist()
+        self.testDocs.loc[:, 'tuple_2'] = test_doc_tuple_df[selected_tuples_lst].values.tolist()
 
         return vectorization_model, lda_model, self.trainDocs, self.valDocs, self.testDocs

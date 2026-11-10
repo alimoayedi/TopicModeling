@@ -2,7 +2,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, AutoConfig, BertForSequenceClassification, AutoModelForSeq2SeqLM, EncoderDecoderModel, RobertaForSequenceClassification
 
 
-class Summarization:
+class DocumentSummarizer:
     def __init__(self, model_name):
         self.model_name = model_name
         self.device = 'cuda'

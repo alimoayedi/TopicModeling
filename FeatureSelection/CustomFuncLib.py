@@ -67,10 +67,9 @@ def padding(lst, maximum_length):
     return sequence.pad_sequences([lst], maxlen=maximum_length, padding='post')[0]
 
 def concatenate_arrays(parent_lst):
-    concatinated = np.array([])
-    for item in range(len(parent_lst)):
-        concatinated = np.append(concatinated, parent_lst[item])
-    return concatinated
+    if not parent_lst or len(parent_lst) == 0:
+        return np.array([])
+    return np.concatenate(parent_lst)
 
 def make_tuple(lst, size):
     list_size = len(lst)

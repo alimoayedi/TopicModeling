@@ -4,19 +4,19 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 class TextVectorizationModel:
-    def __init__(self, apply_cosine_similarity_reduction=False):
+    def __init__(self, apply_cosine_similarity_reduction=False, stop_words_lang = None ,max_df=1, min_df=1):
         self.apply_cosine_similarity_reduction = apply_cosine_similarity_reduction
         self.tfidf_vectorizer = TfidfVectorizer(tokenizer=cus.white_space_splitter, 
                                                 preprocessor=None, 
-                                                stop_words=None, 
-                                                max_df=1.0, 
-                                                min_df=1, 
+                                                stop_words=stop_words_lang, 
+                                                max_df=max_df, 
+                                                min_df=min_df, 
                                                 max_features=None)
         self.count_vectorizer = CountVectorizer(tokenizer=cus.white_space_splitter, 
                                                 preprocessor=None, 
-                                                stop_words=None, 
-                                                max_df=1.0, 
-                                                min_df=1, 
+                                                stop_words=stop_words_lang, 
+                                                max_df=max_df, 
+                                                min_df=min_df, 
                                                 max_features=None, 
                                                 token_pattern=None)
         self.vocab_size = 0

@@ -8,6 +8,13 @@ from tensorflow.keras.layers import (Input, concatenate, Dense, Flatten,
                                      Lambda, Multiply, MultiHeadAttention, 
                                      LayerNormalization, GlobalAveragePooling1D, GlobalMaxPooling1D) # Added MultiHeadAttention, LayerNormalization, and GlobalAveragePooling1D
 
+
+from tensorflow.keras import mixed_precision
+mixed_precision.set_global_policy('mixed_float16')
+
+import tensorflow.keras.backend as K
+import gc
+
 import tensorflow as tf
 from keras.optimizers import Adam
 from sklearn.metrics import f1_score, accuracy_score, classification_report
@@ -114,6 +121,7 @@ class CustomFeatureSelection:
             # Function to evaluate model performance on validation data
     
     def evaluate_model(self, validate_array):
+        
         # Get model predictions
         predictions = self.model.predict(validate_array)
         predicted_labels = np.argmax(predictions, axis=1)
@@ -156,18 +164,31 @@ class CustomFeatureSelection:
         results_df = pd.DataFrame(self.results)
         print(results_df.to_string(index=False))  # Print the DataFrame as a table
 
-    def get_lda(self, dense, dropout, feature_dim):
-
-        # Use feature_dim so Keras expects the correct array size (e.g., 2560 instead of 10)
-        lda_input = Input(shape=(feature_dim,), name='lda_input')
+    def get_side_network_prediction(self, dense, dropout, feature_dim):
         
-        x_lda = BatchNormalization(name="lda_batch_input")(lda_input)
-        x_lda = Dense(dense, activation='relu', name="lda_proj")(x_lda)
-        x_lda = Dropout(dropout, name="lda_dropout")(x_lda)
-        x_lda = BatchNormalization(name="lda_batch_proj")(x_lda)                   
-        x_lda = Flatten()(x_lda)
+        side_input = Input(shape=(feature_dim,), name='side_network_input')
+        
+        # 1. Sparsity-Safe Regularization
+        x = Dropout(0.1, name="side_input_dropout")(side_input)
+        
+        # 2. First Dense Layer (Funnel Step 1: e.g., 512)
+        x = Dense(dense, activation='gelu', name="side_dense_1")(x)
+        x = BatchNormalization(name="side_batch_1")(x)
+        x = Dropout(dropout, name="side_dropout_1")(x)
+        
+        # 3. Second Dense Layer (Funnel Step 2: e.g., 256)
+        x = Dense(int(dense/2), activation='gelu', name="side_dense_2")(x)
+        x = BatchNormalization(name="side_batch_2")(x)
+        
+        # 4. Capture Stable Embedding
+        # Extracted BEFORE the final dropout so the attention mask does not "flicker"
+        side_embedding = x 
+        
+        # 5. Final Prediction Pathway
+        pred_path = Dropout(dropout, name="side_prediction_dropout")(side_embedding)
+        side_prediction = Dense(self.num_classes, activation='softmax', name="side_prediction_injection")(pred_path)
 
-        return lda_input, x_lda
+        return side_input, side_embedding, side_prediction
 
     class UnEqualSizedFeatureSelection:
         
@@ -178,34 +199,33 @@ class CustomFeatureSelection:
             # saves inputs and layers
             inputs = []
             layers_to_concatinate = []
+            side_network_embedding = None
+            side_network_prediction = None
+            side_input = None
 
             dense_settings = list(zip(dense_settings['dense'], dense_settings['dropout']))
-            lda_gating = False
-            if lda_settings is not None:
-                lda_gating = lda_settings.get("lda_gating")
+            
+            # Check if side stream is enabled
+            if lda_settings is not None and lda_settings.get('lda_gating', False):
+                print("Side stream is enabled. Initializing side network...")
+                side_feature_name = lda_settings.get('side_feature_name')
+                
+                # Fetch dimensions specifically for the whole document column
+                feature_dim = int(settings.loc[side_feature_name]['feature_dim'])
+                dense_val = lda_settings.get("lda_dense", 128)
+                drop_val = lda_settings.get("lda_dropout", 0.3)
 
-            # ==========================================================
-            # Variable to hold the LDA tensor if the GA selects it
-            # ==========================================================
-            lda_tensor = None
+                # Initialize side network
+                side_input, side_embed, side_pred = self.global_instances.get_side_network_prediction(
+                    dense_val, drop_val, feature_dim
+                )
+                
+                # Add to model inputs (This sets the side stream input as the LAST input the model expects)
+                side_network_embedding = side_embed
+                side_network_prediction = side_pred
 
             # loops over features
             for feature in features:
-                if feature == 'lda' or feature == 'term_topic_weight':
-                    lda_dim = int(settings.loc[feature]['feature_dim'])
-
-                    lda_input, x_lda = self.global_instances.get_lda(
-                        lda_settings.get("lda_dense"), 
-                        lda_settings.get("lda_dropout"), 
-                        lda_dim
-                    )
-                    inputs.append(lda_input)
-                    layers_to_concatinate.append(x_lda)  # shape (None, lda_proj_dim)
-                    
-                    # UPDATE 2: Save the tensor so the gate can use it without creating a duplicate, disconnected input
-                    lda_tensor = x_lda
-                    continue
-
                 # ==========================================================
                 # NEW ROUTE: Bypass sequence architecture for Dense features
                 # ==========================================================
@@ -234,11 +254,11 @@ class CustomFeatureSelection:
 
 # beginning of the update                
                 # gets the feature dimension
-                feature_dim = setting['feature_dim']
+                feature_dim = int(setting['feature_dim'])
                 model_type = setting.get('model_type', 'transformer') # Identify the architecture route
 
                 if setting['embedding']:
-                    input_layer = Input(shape=(feature_dim,))
+                    input_layer = Input(shape=(feature_dim,), name=f"input_{feature}")
 
                     # 1. Token Embedding
                     token_embeddings = Embedding(input_dim = self.global_instances.vocab_size,
@@ -246,7 +266,6 @@ class CustomFeatureSelection:
                                                  weights = self.global_instances.embedding_weight,
                                                  trainable=self.global_instances.trainable)(input_layer)
                     
-
                     if model_type == 'transformer':
                         # Only apply positional encoding if it is going to a transformer
                         # 2. Positional Embedding
@@ -330,36 +349,43 @@ class CustomFeatureSelection:
                     branch_output = GlobalMaxPooling1D()(graph_x)
                     layers_to_concatinate.append(branch_output)
 
-# end of update
-            if lda_gating and lda_tensor is not None:
-                print("\n--- LDA Gating Activated ---")
-                # apply lda gating directly using the ALREADY REGISTERED lda_tensor
-                gate_hidden = Dense(max(16, self.global_instances.num_classes), activation='relu', name="gate_hidden")(lda_tensor)
-                gate_vector = Dense(len(layers_to_concatinate), activation='sigmoid', name="branch_gate")(gate_hidden)
+            if side_input is not None:
+                inputs.append(side_input)
 
-                gated_layers_to_concatinate = []
-
-                for index, branch in enumerate(layers_to_concatinate):
-                    # Extract gate scalar for branch i
-                    # Using Lambda to slice: gate_vector[:, i:i+1]
-                    gate_i = Lambda(lambda vector, idx=index: vector[:, idx:idx+1], name=f"gate_slice_{index}")(gate_vector)
-                    # Multiply branch representation by gate scalar (broadcast)
-                    gated_branch = Multiply(name=f"gated_branch_{index}")([branch, gate_i])
-                    gated_layers_to_concatinate.append(gated_branch)
-                
-                layers_to_concatinate = gated_layers_to_concatinate
-
-
+            # 1. Merge the main stream features normally
             if len(layers_to_concatinate) > 1:
-                merged = concatenate(layers_to_concatinate)
+                merged_main = concatenate(layers_to_concatinate, name="main_stream_concat")
+            elif len(layers_to_concatinate) == 1:
+                merged_main = layers_to_concatinate[0]
             else:
-                merged = layers_to_concatinate[0]
+                merged_main = None
 
-            passing_layer = merged
+            # 2. Apply Side-Stream Feature Modulation
+            if side_network_embedding is not None and merged_main is not None:
+                
+                # Get the dynamic dimension size of the concatenated main stream
+                # Note: Keras dynamic shapes require accessing the shape attribute
+                main_dim = merged_main.shape[-1] 
+                
+                # Use the side network's embedding to generate an attention mask
+                # The Dense layer projects it to match the exact size of the main stream
+                attention_mask = Dense(main_dim, activation='sigmoid', name="side_attention_mask")(side_network_embedding)
+                
+                # Multiply the main features by the attention mask (Squeeze-and-Excitation style)
+                modulated_main = Multiply(name="modulated_main")([merged_main, attention_mask])
+                
+                # Finally, concatenate the re-weighted main features with the explicit probability prediction
+                passing_layer = concatenate([modulated_main, side_network_prediction], name="final_injected_merge")
+            
+            elif merged_main is not None:
+                passing_layer = merged_main
+            else:
+                passing_layer = side_network_prediction
+
             # Additional dense layers for further processing
             for dense_setting in dense_settings:
                 passing_layer = Dense(dense_setting[0], activation='relu')(passing_layer)
-                passing_layer = Dropout(0.1)(passing_layer)
+                passing_layer = Dropout(dense_setting[1])(passing_layer)
 
             output_layer = Dense(self.global_instances.num_classes, activation='softmax')(passing_layer)
 
@@ -570,12 +596,18 @@ class CustomFeatureSelection:
                 print(f"   [Training] Evaluating new subset: {list(subset_key)}")
                 self.__trainModel(list(subset), settings, dense_settings, lda_settings, epochs, batch_size)
                 
-                # Build validation array
-                # validate_array = [np.stack(self.global_instances.val_df[f]) for f in subset]
-                validate_array = [np.stack(self.global_instances.test_df[f]) for f in subset]
+                # 1. Build validation dictionary mapping exact main layer names
+                validate_dict = {}
+                for f in subset:
+                    validate_dict[f"input_{f}"] = np.stack(self.global_instances.test_df[f])
                 
-                # Get evaluation dictionary and extract the target metric (e.g., 'Macro F1')
-                new_score_dict = self.global_instances.evaluate_model(validate_array)
+                # 2. Append side stream testing data to the dictionary if active
+                if lda_settings is not None and lda_settings.get('lda_gating', False):
+                    side_feature_name = lda_settings.get('side_feature_name')
+                    validate_dict['side_network_input'] = np.stack(self.global_instances.test_df[side_feature_name])
+
+                # 3. Get evaluation dictionary using the mapped dict
+                new_score_dict = self.global_instances.evaluate_model(validate_dict)
                 score = new_score_dict[evaluation]
                 
                 self.global_instances.print_performance(list(subset), new_score_dict)
@@ -665,19 +697,97 @@ class CustomFeatureSelection:
             
             return best_overall_features, best_overall_score
 
+        def test_specific_features(self, features_lst, settings, dense_settings, lda_settings, epochs, batch_size, evaluation='macro'):
+            """
+            Trains and evaluates the model on a specific, predetermined set of features.
+            """
+            print(f"\n--- Testing Specific Feature Set: {features_lst} ---")
+            
+            # 1. Train the model on the exact provided features
+            self.__trainModel(features_lst, 
+                              settings, 
+                              dense_settings, 
+                              lda_settings, 
+                              epochs, 
+                              batch_size)
+            
+            # 2. Build validation dictionary mapping exact main layer names
+            validate_dict = {}
+            for f in features_lst:
+                validate_dict[f"input_{f}"] = np.stack(self.global_instances.test_df[f])
+            
+            # 3. Append side stream testing data to the dictionary if active
+            if lda_settings is not None and lda_settings.get('lda_gating', False):
+                side_feature_name = lda_settings.get('side_feature_name')
+                validate_dict['side_network_input'] = np.stack(self.global_instances.test_df[side_feature_name])
+
+            # 4. Get evaluation dictionary using the mapped dict
+            score_dict = self.global_instances.evaluate_model(validate_dict)
+            score = score_dict[evaluation]
+            
+            # 5. Print and store the performance
+            self.global_instances.print_performance(features_lst, score_dict)
+            
+            print(f"--- Testing Complete | {evaluation}: {score:.4f} ---")
+            
+            return score
+
         def __trainModel(self, features, settings, dense_settings, lda_settings, epochs, batch_size):
             
-            del self.global_instances.model
+            # PROPER MEMORY CLEARING SEQUENCE
+            if self.global_instances.model is not None:
+                del self.global_instances.model
+            
+            # Destroy the current TF graph and free GPU VRAM
+            K.clear_session()
+            
+            # Force Python to immediately collect unreferenced objects
+            gc.collect()
             
             self.__customAdjustableModel(features=features,
                                          settings=settings,
                                          dense_settings=dense_settings,
                                          lda_settings=lda_settings)
                     
-            train_array = [np.stack(self.global_instances.train_df[feature]) for feature in features]
+            # 1. Map main features to their exact Input layer names
+            train_dict = {}
+            for feature in features:
+                train_dict[f"input_{feature}"] = np.stack(self.global_instances.train_df[feature])
 
-            self.global_instances.model.fit(train_array, self.global_instances.train_labels, epochs=epochs, batch_size=batch_size, verbose=0)
-                    
+            # 2. Map the side stream to its exact Input layer name
+            if lda_settings is not None and lda_settings.get('lda_gating', False):
+                side_feature_name = lda_settings.get('side_feature_name')
+                train_dict['side_network_input'] = np.stack(self.global_instances.train_df[side_feature_name])
+
+            # =================================================================
+            # NEW: DYNAMIC CLASS WEIGHT CALCULATION
+            # =================================================================
+            from sklearn.utils.class_weight import compute_class_weight
+            
+            # Convert one-hot labels back to 1D integers to compute frequencies
+            y_integers = np.argmax(self.global_instances.train_labels, axis=1)
+            unique_classes = np.unique(y_integers)
+            
+            # Compute balanced weights (rare classes get exponentially higher weights)
+            class_weights_array = compute_class_weight(
+                class_weight='balanced', 
+                classes=unique_classes, 
+                y=y_integers
+            )
+            
+            # Create the dictionary required by Keras
+            class_weight_dict = dict(zip(unique_classes, class_weights_array))
+            # =================================================================
+
+            # 3. Pass the dictionary directly to Keras. 
+            self.global_instances.model.fit(
+                x=train_dict, 
+                y=self.global_instances.train_labels, 
+                epochs=epochs, 
+                batch_size=batch_size, 
+                class_weight=class_weight_dict, # <-- APPLIED HERE
+                verbose=0
+            )
 
 
 
